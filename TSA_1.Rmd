@@ -1,0 +1,342 @@
+---
+title: "Characteristics of Time Series"
+author: "Miguel Conde"
+date: "27 de diciembre de 2016"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 4
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE,
+                      fig.align = "center")
+```
+
+
+REFERENCE: [Time Series Analysis and Its Applications: With R Examples](http://www.stat.pitt.edu/stoffer/tsa4/)
+
+```{r}
+if(!require(astsa)) {
+  install.packages("astsa")
+  library(astsa)
+}
+```
+
+
+## Characteristics of Time Series
+
+The obvious correlation introduced by the sampling of adjacent points
+in time can severely restrict the applicability of the many conventional statistical methods traditionally dependent on the assumption that these adjacent observations are independent and identically distributed.
+
+In our view, the first step in any time series investigation always involves careful scrutiny of the recorded data plotted over time. This scrutiny often suggests the method of analysis as well as statistics that will be of use in summarizing the information in the data. 
+
+Before looking more closely at the particular statistical methods, it is appropriate to mention that two separate, but not necessarily mutually exclusive, approaches to time series analysis exist, commonly identified as the **time domain approach** and the **frequency domain approach**.
+
+### Examples
+
+#### Johnson & Johnson Quarterly Earnings
+Next figure shows quarterly earnings per share for the U.S. company Johnson & Johnson. There are 84 quarters (21 years) measured from the first quarter of 1960 to the last quarter of 1980.
+
+```{r}
+plot(jj, type="o", ylab="Quarterly Earnings per Share")
+```
+In this case, note the gradually increasing underlying trend and the rather regular variation superimposed on the trend that seems to repeat over quarters.
+
+#### Global Warming
+The data shown in the next figure are the global mean land–ocean temperature index from 1880 to 2009, with the base period 1951-1980. In particular, the data are deviations, measured in degrees centigrade, from the 1951-1980 average.
+
+```{r}
+plot(gtemp, type="o", ylab="Global Temperature Deviations")
+```
+We note an apparent upward trend in the series during the latter part of the twentieth century that has been used as an argument for the global warming hypothesis. Note also the leveling off at about 1935 and then another rather sharp upward trend at about 1970. 
+The question of interest for global warming proponents and opponents is whether the overall trend is natural or whether it is caused by some human-induced interface.
+
+#### Speech Data
+
+Next figure shows a small .1 second (1000 point) sample of recorded speech for the phrase *aaa ... hhh*, and we note the repetitive nature of the signal and the rather regular periodicities.
+
+```{r}
+plot(speech)
+```
+Spectral analysis can be used in this context to produce a signature of this phrase that can be compared with signatures of various library syllables to look for a match. 
+One can immediately notice the rather regular repetition of small wavelets. The separation between the packets is known as the pitch period and represents the response of the vocal tract filter to a periodic sequence of pulses stimulated by the opening and closing of the glottis.
+
+
+#### New York Stock Exchange
+
+The figure below shows the daily returns (or percent change) of the New York Stock Exchange (NYSE) from February 2, 1984 to December 31, 1991.
+
+```{r}
+plot(nyse, ylab="NYSE Returns")
+```
+It is easy to spot the crash of October 19, 1987 in the figure.
+The data shown in Figure 1.4 are typical of return data. The mean of the series appears to be stable with an average return of approximately zero, however, the volatility (or variability) of data changes over time. In fact, the data show volatility clustering; that is, highly volatile periods tend to be clustered together.
+
+
+#### El Niño and Fish Population
+We may also be interested in analyzing several time series at once.
+Next figure shows monthly values of an environmental series called the Southern Oscillation Index (SOI) and associated Recruitment (number of new fish).
+Both series are for a period of 453 months ranging over the years 1950–1987.
+The SOI measures changes in air pressure, related to sea surface temperatures in the central Pacific Ocean.
+The central Pacific warms every three to seven years due to the El Niño effect, which has been blamed, in particular, for the 1997 floods in the midwestern portions of the United States. 
+
+```{r}
+par(mfrow = c(2,1)) # set up the graphics
+plot(soi, ylab="", xlab="", main="Southern Oscillation Index")
+plot(rec, ylab="", xlab="", main="Recruitment")
+par(mfrow = c(1,1))
+```
+
+Both series tend to exhibit repetitive behavior, with regularly repeating cycles that are easily visible.
+This periodic behavior is of interest because underlying processes of interest may be regular and the rate or frequency of oscillation characterizing the behavior of the underlying series would help to identify them. 
+One can also remark that the cycles of the SOI are repeating at a faster rate than those of the Recruitment series. The Recruitment series also shows several kinds of oscillations, a faster frequency that seems to repeat about every 12 months and a slower frequency that seems to repeat about every 50 months.
+The two series also tend to be somewhat related; it is easy to imagine that somehow the fish population is dependent on the SOI.
+
+#### fMRI Imaging
+
+A fundamental problem in classical statistics occurs when we are given a collection of independent series or vectors of series, generated under varying experimental conditions or treatment configurations. Such a set of series is shown below, where we observe data collected from various locations in the brain via functional magnetic resonance imaging (fMRI). 
+
+In this example, five subjects were given periodic brushing on the hand. The stimulus was applied for 32 seconds and then stopped for 32 seconds; thus, the signal period is 64 seconds. The sampling rate was one observation every 2 seconds for 256 seconds (n = 128). 
+
+For this example, we averaged the results over subjects (these were evoked responses, and all subjects were in phase). The series shown in the figure are consecutive measures of blood oxygenation-level dependent (bold) signal intensity, which measures areas of activation in the brain.
+
+```{r}
+par(mfrow=c(2,1), mar=c(3,2,1,0)+.5, mgp=c(1.6,.6,0))
+ts.plot(fmri1[,2:5], lty=c(1,2,4,5), ylab="BOLD", xlab="",
+main="Cortex")
+ts.plot(fmri1[,6:9], lty=c(1,2,4,5), ylab="BOLD", xlab="",
+main="Thalamus & Cerebellum")
+mtext("Time (1 pt = 2 sec)", side=1, line=2)
+```
+Notice that the periodicities appear strongly in the motor cortex series and less strongly in the thalamus and cerebellum. The fact that one has series from different areas of the brain suggests testing whether the areas are responding differently to the brush stimulus.
+
+#### Earthquakes and Explosions
+Next figure represent two phases or arrivals along the surface, denoted by P (t = 1; : : : ; 1024) and S (t = 1025; : : : ; 2048), at a seismic recording station. The recording instruments in Scandinavia are observing earthquakes and mining explosions with one of each shown in the figure.
+
+The general problem of interest is in distinguishing or discriminating between waveforms generated by earthquakes and those generated by explosions.
+
+```{r}
+par(mfrow=c(2,1))
+plot(EQ5, main="Earthquake")
+plot(EXP6, main="Explosion")
+```
+
+## TS Models
+A time series can be defined as a collection of random variables indexed
+according to the order they are obtained in time.
+
+We may consider a time series as a sequence of random variables, $x_1, x_2, x_3,...$, where the random variable $x_1$ denotes the value taken by the series at the first time point, the variable $x_2$ denotes the value for the second time period, $x_3$ denotes the value for the third time period, and so on. 
+
+In general, a collection of random variables, $\{x_t\}$, indexed by $t$ is referred to as a **stochastic process**.
+
+The observed values of a stochastic process are referred to as a *realization* of the stochastic process.
+
+### White Noise
+A collection of uncorrelated random variables, $w_t$, with mean 0 and finite variance $\sigma_w^2$.
+
+We shall sometimes denote this process as $w_t \sim wn(0; \sigma_w^2)$. 
+
+The designation white originates from the analogy with white light and indicates that all possible periodic oscillations are present with equal strength.
+
+We will, at times, also require the noise to be independent and identically
+distributed (iid) random variables with mean 0 and variance $\sigma_w^2$.
+
+We shall distinguish this case by saying *white independent noise*, or by writing $w_t \sim \text{iid}(0; \sigma_w^2)$. 
+
+A particularly useful white noise series is Gaussian white noise,
+wherein the wt are independent normal random variables, with mean 0 and
+variance $\sigma_w^2$; or more succinctly, $w_t \sim \text{iid} \ \text{N}(0; \sigma_w^2)$.
+
+```{r}
+w = rnorm(500,0,1) # 500 N(0,1) variates
+plot.ts(w, main="white noise")
+```
+If the stochastic behavior of all time series could be explained in terms of
+the white noise model, classical statistical methods would suffice.
+
+### Moving averages
+We might replace the white noise series $w_t$ by a moving average that smooths the series. For example, consider replacing $w_t$ by:
+
+$$
+v_t = \frac{1}{3}(w_{t-1}+w_t+w_{t+1})
+$$
+```{r}
+w = rnorm(500,0,1) # 500 N(0,1) variates
+v = filter(w, sides=2, rep(1/3,3)) # moving average
+par(mfrow=c(2,1))
+plot.ts(w, main="white noise")
+plot.ts(v, main="moving average")
+```
+
+
+Inspecting the series show a smoother version of the first series, reflecting the fact that the slower oscillations are more apparent and some of the faster oscillations are taken out.
+
+It's worth noting that a linear combination of values in a time series is referred to, generically, as a *filtered series*; hence the command `filter`.
+
+### Autoregressions
+Suppose we consider the white noise series $w_t$ as input and calculate the output using:
+$$
+x_t = x_{t-1}-0.9x_{t-2}+w_t
+$$ 
+successively for $t = 1, 2,...,500$. This represents a regression or
+prediction of the current value $x_t$ of a time series as a function of the past two values of the series, and, hence, the term **autoregression** is suggested.
+
+The resulting output series is:
+```{r}
+w = rnorm(550,0,1) # 50 extra to avoid startup problems
+x = filter(w, filter=c(1,-.9), method="recursive")[-(1:50)]
+plot.ts(x, main="autoregression")
+```
+
+### Random Walk with Drift
+A model for analyzing trend such as seen in the global temperature data is the **random walk with drift** model given by:
+
+$$
+x_t = \delta + x_{t-1} + w_t
+$$
+for $t = 1,2...$, with initial condition $x_0 = 0$, and where $w_t$ is white noise.
+
+The constant $\delta$ is called the **drift**, and when $\delta = 0$, the model is called simply a **random walk**.
+
+The term *random walk* comes from the fact that, when $\delta = 0$,
+the value of the time series at time $t$ is the value of the series at time $t-1$ plus a completely random movement determined by $w_t$. 
+
+Note that we may rewrite the above expression as a cumulative sum of white noise variates:
+
+$$
+x_t = \delta t + \sum_{j=1}^t{w_j}
+$$
+```{r}
+set.seed(154) # so you can reproduce the results
+w = rnorm(200,0,1); x = cumsum(w) # two commands in one line
+wd = w +.2; xd = cumsum(wd)
+plot.ts(xd, ylim=c(-5,55), main="random walk")
+lines(x); lines(.2*(1:200), lty="dashed")
+```
+
+
+### Signal in Noise
+Many realistic models for generating time series assume an underlying signal
+with some consistent periodic variation, contaminated by adding a random
+noise:
+
+$$
+x_t = 2\cos(2\pi t/50+0.6\pi)+w_t
+$$
+where the first term is regarded as the signal.
+
+```{r}
+cs = 2*cos(2*pi*1:500/50 + .6*pi)
+w = rnorm(500,0,1)
+par(mfrow=c(3,1), mar=c(3,2,2,1), cex.main=1.5)
+plot.ts(cs, main=expression(2*cos(2*pi*t/50+.6*pi)))
+plot.ts(cs+w, main=expression(2*cos(2*pi*t/50+.6*pi) + N(0,1)))
+plot.ts(cs+5*w, main=expression(2*cos(2*pi*t/50+.6*pi) + N(0,25)))
+```
+
+The ratio of the amplitude of the signal to $\sigma_w$ (or some function of the ratio) is sometimes called the **signal-to-noise ratio (SNR)**; the larger the SNR, the easier it is to detectthe signal.
+
+## Autocorrelation and Cross-Correlation
+
+### Definitions: marginal distribution and density functions; mean functions.
+
+A time series, observed as a collection of $n$ random variables at arbitrary integer time points $t_1, t_2,...,t_n$, for any positive integer $n$, can be described by the **marginal distribution functions**:
+
+$$
+F_t(x) = P\{x_t \leq x\}
+$$
+
+or the corresponding **marginal density functions**:
+
+$$
+ft(x) = \frac{\partial F_t(x)}{\partial x}
+;
+$$
+The **mean function** is defined as:
+$$
+\mu_{xt} = E(x_t) = \int_{-\infty}^{\infty}xf_t(x) dx
+$$
+provided it exists, where $E$ denotes the usual **expected value operator**.
+
+When no confusion exists about which time series we are referring to, we will drop a subscript and write $\mu_{xt}$ as $\mu_{t}$.
+
+#### Mean Function of a Moving Average Series
+
+$$
+v_t = \frac{1}{3}(w_{t-1}+w_t+w_{t+1})
+$$
+
+$$
+\mu_{vt} = E(v_t)=\frac{1}{3}[E(w_{t-1})+E(w_t)+E(w_{t+1})]=\frac{1}{3}[0+0+0]=0
+$$
+i.e.,
+
+$$
+\mu_{vt} = \mu_{wt} = 0
+$$
+
+
+#### Mean Function of a Random Walk with Drift
+$$
+x_t = \delta t + \sum_{j=1}^t{w_j}
+$$
+
+$$
+\mu_{xt} = E(x_t) = E(\delta t) + E(\sum_{j=1}^t{w_j}) \delta E(t) + \sum_{j=1}^t{E(w_t)} = \delta t
+$$
+
+#### Mean Function of Signal Plus Noise
+
+$$
+x_t = 2\cos(2\pi t/50+0.6\pi)+w_t
+$$
+
+
+$$
+\mu_{xt} = E(x_t) = E(2\cos(2\pi t/50+0.6\pi)+w_t) = 2\cos(2\pi t/50+0.6\pi) + E(w_t) = 2\cos(2\pi t/50+0.6\pi)
+$$
+
+### Definitions: covariance and correlation.
+
+The lack of independence between two adjacent values $x_s$ and $x_t$ can be
+assessed numerically, as in classical statistics, using the notions of **covariance** and **correlation**.
+
+The **autocovariance function** is defined as the second moment product:
+
+$$
+\gamma_x(s,t) = \text{cov}(x_s,x_t)=E[(x_s-\mu_s)(x_t-\mu_t)]
+$$
+
+for all $s$ and $t$. 
+
+When no possible confusion exists about which time series we are referring to, we will drop the subscript and write $\gamma_x(x,t)$ as $\gamma(x,t)$
+
+Note that $\gamma_x(s,t) = \gamma_x(t,s)$ for all time points $s$ ant $t$.
+
+The autocovariance measures the *linear* dependence between two points on the same series observed at diffeerent times.
+
+Very smooth series exhibit autocovariance functions that stay large even when the $t$ and $s$ are far apart, whereas choppy series tend to have autocovariance functions that are nearly zero for large separations.
+
+
+#### Autocovariance of White Noise
+
+
+#### Autocovariance of a Moving Average
+
+
+#### Autocovariance of a Random Walk
+
+### Definition: autocorrelation function (ACF)
+
+### Definition: cross-covariance function
+
+### Definition: cross-correlation function (CCF)
+
+## Stationary Time Series
+
+## Estimation of Correlation
+
+## Vector-Valued and Multidimensional Series
+
