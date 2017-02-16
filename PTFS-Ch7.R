@@ -196,7 +196,7 @@ accuracy(fitted_m, valid_ts)
 ## EVALUATING PREDICTABILITY
 library(tseries)
 adf.test(ridership_ts)
-# So we reject H_0 (ridership_ts is not stationary) and turn to H_a:
+# So we reject H_0 (H_0: ridership_ts is not stationary) and turn to H_a:
 # ridership_ts is stationary (i.e., it's not a random walk)
 
 Acf(diff(ridership_ts)) # some ac out of the thresholds => no random walk

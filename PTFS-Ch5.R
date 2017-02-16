@@ -162,7 +162,7 @@ axis(1, at = seq(1991, 2004.25, 1), labels = format(seq(1991, 2004.25, 1)))
 par(old_par)
 
 
-# Simple Exponential Smoothing (SES) --------------------------------------
+# 5.4 Simple Exponential Smoothing (SES) ----------------------------------
 # The idea is similar to forecasting with a TMA, except that instead of
 # taking a simple average over the w most recent values, we take a _weighted
 # average of all_ past values, so that the weights decrease exponentially
@@ -237,7 +237,7 @@ ses_opt
 # is equal to w = (2/alpha) - 1
 
 
-# Advanced Exponential Smoothing (AES) ------------------------------------
+# 5.5 Advanced Exponential Smoothing (AES) --------------------------------
 # MA and SES can be used to forecast series with just a level and noise.
 # If the series shows, in addition, a trend and/or seasonality, we can first 
 # remove those components.
@@ -303,6 +303,7 @@ axis(1, at = seq(1991, 2004.25, 1), labels = format(seq(1991, 2004.25, 1)))
 nValid <- 36
 partitions <- tsDataPartition(ridership_ts, nValid = nValid)
 
+# model = "MAA" to fit Holt-Winter's exponential smoothing model
 hwin <- ets(partitions$train_ts, model = "MAA")
 hwin_pred <- forecast(hwin, h = nValid, level = 0)
 
@@ -330,3 +331,53 @@ abline(h = 0, col = "black", lty = 2)
 
 plot(hwin$states[,"l"] + hwin$states[,"s1"], col = "blue", lty = 2)
 lines(train_ts)
+
+
+# 5.6 SUMMARY OF EXPONENTIAL SMOOTHING IN R USING ets() -------------------
+#
+# 2 error types: additive / multipliacative
+# 3 trend types: additive / multiplicative / none
+# 3 seasonality: additive / multiplicative / none
+#
+# 2 x 3 x 3 = 18 possible models
+# 
+# Additional trend types:
+# additive damped (Ad)
+# multiplicative damped (Md)
+
+## Automated selection
+ets(partitions$train_ts, restrict = FALSE, allow.multiplicative.trend = TRUE)
+
+
+# 5.7 - EXTENDIONS OF EXPONENTIAL SMOOTHING -------------------------------
+
+## MULTIPLE SEASONAL CYCLES
+bike_hourly_df <- read.csv("./DATA/BikeSharing_hour.csv")
+# 1 month (07 2012): 31 days * 24 hours/day = 744 hours
+jul12 <- bike_hourly_df$cnt[13004:13747]
+# msts() sets up the time series with 2 seasonal periods: hours per day and 
+# hours per week
+bike_hourly_msts <- msts(jul12, 
+                         seasonal.periods = c(24, 168), 
+                         start = c(0,1))
+
+# Training and validation sets
+nTotal <- length(jul12)
+nTrain <- 21 * 24 # 21 days of hourly data
+nValid <- nTotal - nTrain # 10 days of hourly data
+yTrain_msts <- window(bike_hourly_msts, start = c(0,1), end = c(0, nTrain))
+yValid_msts <- window(bike_hourly_msts, 
+                      start = c(0, nTrain + 1), end = c(0, nTotal))
+
+# Fit a double seasoned holt-winter's model
+bike_hourly_dshw_pred <- dshw(yTrain_msts, h = nValid)
+# This is to correct a minor error in forecast package v7.1
+bike_hourly_dshw_pred_mean <- msts(bike_hourly_dshw_pred$mean,
+                                   seasonal.periods = c(24, 168),
+                                   start = c(0, nTrain + 1))
+accuracy(bike_hourly_dshw_pred_mean, yValid_msts)
+
+plot(yTrain_msts, xlim= c(0, 4+3/7), 
+     xlab = "Week",
+     ylab = "Hourly Bike Rentals")
+lines(bike_hourly_dshw_pred_mean, lwd = 2, col = "blue")

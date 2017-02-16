@@ -131,7 +131,7 @@ abline(v = 2004.25, col = "red", lty = 3)
 # (a)
 library(readxl)
 sep11_data <- 
-  read_excel("~/PROYECTOS DATA SCIENCE/TSA_book/DATA/Sept11Travel.xls")
+  read_excel("./DATA/Sept11Travel.xls")
 sep11_ts <- ts(sep11_data$`Air RPM (000s)`, 
                    start = c(1990,1), end = c(2004, 4),
                    frequency = 12)
@@ -167,6 +167,11 @@ plot(seasonalPartPreSep11_ts)
 
 plot(preSep11_ts/1000000 - seasonalPartPreSep11_ts, ylim = c(0, 70))
 plot(hwin_preSep11$states[,"l"], ylim = c(0, 70)) # level
+
+# MUCH BETTER:
+hwin_preSep11_stl <- stl(preSep11_ts / 1000000, s.window = "periodic")
+hwin_preSep11_noseason <- preSep11_ts/1000000 - hwin_preSep11_stl$time.series[, "seasonal"]
+plot(hwin_preSep11_noseason, ylim = c(0, 70))
 
 
 # (c) lambda = 1 means MULTIPLICATIVE seasonality
