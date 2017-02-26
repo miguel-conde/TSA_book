@@ -1,0 +1,233 @@
+---
+title: "Filtro paso bajo ideal"
+author: "Miguel Conde"
+date: "23 de febrero de 2017"
+output: html_document
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE,
+                      fig.align = "center")
+```
+
+
+```{r}
+source("dftFUNs.R")
+```
+
+Un FPB ideal es, en el dominio de la frecuencia:
+
+$$
+H(e^{j\omega}) = \begin{cases}
+                  1, & \mbox{si } -\omega_c \leq \omega \leq \omega_c \\
+                  0, & \mbox{si } |\omega| > \omega_c 
+                 \end{cases}
+$$
+
+```{r}
+H_fpb <- function(w, w_c, m = 1, alpha = 0) {
+  if (w_c > pi)
+    stop("w_c can't be greater than pi")
+  basic_fpb <- sapply(w, function(x) {
+      if (abs(x) <= w_c)
+        return(complex(modulus = m, argument = -alpha*x))
+    return(complex(modulus = 0))
+  })
+  basic_fpb
+}
+```
+
+```{r}
+w_range <- (-2:2)*pi
+
+xlabels <- sapply(w_range/pi, function(x){
+  if (x == 0)
+    return("0")
+  if (x == 1)
+    return(expression(pi))
+  if (x == -1)
+    return(expression(paste("-" * pi)))
+  s <- paste0("expression(paste(", x, "* pi))")
+  return(eval(parse(text = s)))
+})
+
+w_seq <- seq(w_range[1], w_range[length(w_range)], by = pi/100)
+Hw_fpb <- H_fpb(w_seq, pi/4)
+plot(w_seq, Mod(Hw_fpb), type = "l", xaxt = "n", ylim = c(0, 1.5),
+     main = expression(paste("Low Pass Filter (",
+                             omega[c], " = ", pi/4, ")")),
+     ylab = expression(paste("|H(", plain(e)^{j*omega}, ")|")),
+     xlab = expression(omega), bty = "l")
+axis(at = w_range, side = 1, labels = (xlabels))
+abline(h = 0, col ="blue")
+abline(v = 0, col = "blue")
+abline(v = w_range, col = "red", lty = 3)
+```
+
+(Tener en cuenta que debe ser periódica con periodo $2\pi$)
+
+Esta respuesta en frecuencia corresponde, en el dominio del tiempo, a una respuesta al impulso:
+
+$$
+h[n] = \frac{1}{2\pi}\int_{<2\pi>}H(e^{j\omega})e^{j \omega n}d\omega = \\
+\frac{1}{2\pi}\int_{-\omega_c}^{\omega_c}e^{j \omega n}d\omega = \\
+\frac{1}{2j \pi n}[e^{j \omega n}]_{-\omega_c}^{\omega_c} = \frac{sin(\omega_c n)}{\pi n} 
+$$
+
+```{r}
+h_fpb <- function(n, w_c, alpha = 0) {
+  sapply(n, function(x) {
+    if(x == alpha) 
+      w_c 
+    else
+      sin(w_c*(x-alpha)) / (x - alpha)
+  }) / pi
+}
+```
+
+```{r}
+n_range <- -20:20
+
+hn_fpb <- h_fpb(n_range, pi/4)
+
+plot(n_range, hn_fpb, type = "h",
+     main = expression(paste("Low Pass Filter (", omega[c], " = ", 
+                             pi/4, ")")),
+     ylab = "h[n]", xlab = "n", bty = "l")
+lines(n_range, hn_fpb, type = "p")
+abline(v = 0, col = "blue")
+abline(h = 0, col = "blue")
+```
+
+¿Que sucede cuando excitamos un LTI con la función escalón?. En el dominio del tiempo:
+
+$$
+y[n] = h[n]*x[n]=h[n]*u[n]=\sum_{k=-\infty}^\infty]u[k]h[n-k] = \\
+\sum_{k=0}^\infty]h[n-k] =\sum_{m=-\infty}^n]h[m]=s[n]
+$$
+Es decir, cuando excitamos un LTI con una señal escalón, la salida es el acumulador de la respuesta al impulso del sistema.
+
+Al ser un acumulador, su transformada de Fourier es:
+
+$$
+S(e^{j\omega})=\frac{1}{1-e^{-j\omega}}H(e^{j\omega}) + \pi H(e^{j0})\sum_{k=-\infty}^{\infty}\delta(\omega-2k\pi)
+$$
+
+Por lo tanto, si el sistema es un filtro paso bajo, la salida correspondiente a la función escalón es:
+
+$$
+S(e^{j\omega})=\frac{1}{1-e^{-j\omega}}H(e^{j\omega}) + \pi \sum_{k=-\infty}^{\infty}\delta(\omega-2k\pi)
+$$
+Y, en el dominio del tiempo:
+
+$$
+s[n] = \sum_{m=-\infty}^n]h[m] = \sum_{m=-\infty}^n]\frac{sin(\omega_c m)}{\pi m} ]
+$$
+```{r}
+n_range <- -20:20
+
+hn_fpb <- h_fpb(n_range, pi/4)
+
+sn_fpb <- cumsum(hn_fpb)
+
+plot(sn_fpb, type = "h",
+     main = expression(paste("Low Pass Filter (", omega[c], 
+                             " = ", pi/4, ") response to u[n]")),
+     ylab = "s[n]", xlab = "n", bty = "l", xaxt = "n")
+axis(side = 1, at = (n_range+21), labels = n_range)
+lines(sn_fpb)
+abline(v = which(n_range == 0), col = "blue")
+abline(h = 0, col = "blue")
+```
+
+
+Comprobación importante: si hacemos "a mano" la dft de la $h[n]$ del fpb:
+
+```{r}
+Hw_fpb <- dft(h_fpb(-20:20, pi/4))
+plot(Mod(Hw_fpb$dft), type = "h", xaxt = "n",
+     ylab = expression(paste("|H(", plain(e)^{j*omega}, ")|")),
+     xlab = expression(omega))
+axis(side = 1, at = c(1, 11, 21, 31, 41), 
+     labels = expression(0, pi/2, pi, 3*pi/2, 2*pi))
+lines(Mod(Hw_fpb$dft), type = "o")
+```
+
+```{r}
+#plot(Mod(dft(h_fpb(-100:100, pi/4))$dft), type = "l")
+Hw_fpb <- dft(h_fpb(-100:100, pi/4))
+plot(Mod(Hw_fpb$dft), type = "l", xaxt = "n",
+     ylab = expression(paste("|H(", plain(e)^{j*omega}, ")|")),
+     xlab = expression(omega))
+axis(side = 1, at = c(1, 51, 101, 151, 201), 
+     labels = expression(0, pi/2, pi, 3*pi/2, 2*pi))
+# lines(Mod(Hw_fpb$dft), type = "l")
+```
+
+```{r}
+# plot(Mod(dft(h_fpb(-1000:1000, pi/4))$dft), type = "l")
+Hw_fpb <- dft(h_fpb(-1000:1000, pi/4))
+plot(Mod(Hw_fpb$dft), type = "l", xaxt = "n",
+     ylab = expression(paste("|H(", plain(e)^{j*omega}, ")|")),
+     xlab = expression(omega))
+axis(side = 1, at = c(1, 501, 1001, 1501, 2001), 
+     labels = expression(0, pi/2, pi, 3*pi/2, 2*pi))
+# lines(Mod(Hw_fpb$dft), type = "l")
+```
+
+```{r}
+#plot(Mod(dft(h_fpb(-10000:10000, pi/4))$dft), type = "l")
+Hw_fpb <- dft(h_fpb(-10000:10000, pi/4))
+plot(Mod(Hw_fpb$dft), type = "l", xaxt = "n",
+     ylab = expression(paste("|H(", plain(e)^{j*omega}, ")|")),
+     xlab = expression(omega))
+axis(side = 1, at = c(1, 5001, 10001, 15001, 20001), 
+     labels = expression(0, pi/2, pi, 3*pi/2, 2*pi))
+# lines(Mod(Hw_fpb$dft), type = "l")
+```
+Como se ve, cuantas más frecuencias añadamos, mejor reconstruimos la respuesta en frecuencia del fpb.
+
+Vamos a hacer ahora "a mano" el comportamienot del filtro en frecuencia cuando la entrada es un escalón.
+
+```{r}
+N <- 41
+n_range <- (-(N - 1) / 2) : ((N - 1) / 2)
+
+# Escalon
+u_n <- sapply(n_range, stepFUN)
+U_w <- dft(u_n)
+
+# FPB
+h_n <- h_fpb(n_range, pi/4)
+H_w <- dft(h_n)
+
+# Salida del FPB en dominio frecuencia
+S_w <- H_w$dft * U_w$dft
+
+# En el dominio del tiempo:
+s_n <- fft(S_w, inverse = TRUE)
+
+plot(n_range, N*Re(s_n)[1:N], type = "h")
+lines(n_range, N*Re(s_n)[1:N], type = "l")
+abline(h = 0, col = "blue")
+abline(v = 0, col = "blue")
+```
+
+
+Y esto siguiente, ¿qué es?
+
+
+```{r}
+plot(Mod(dft(sapply(-40:40, stepFUN))$dft), type = "l")
+```
+
+```{r}
+plot(sapply(-40:40, stepFUN), type = "h")
+```
+
+
+
+```{r}
+plot(Mod(fft(dft(h_fpb(-10000:10000, pi/4))$dft*dft(sapply(-10000:10000, stepFUN))$dft, inverse = TRUE)), type = "l")
+```
+

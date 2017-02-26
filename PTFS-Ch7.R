@@ -67,7 +67,7 @@ Acf(ridership_24_ts,lag.max = 12, main = "", lwd = 5, col = "lightblue")
 # Example
 Acf(ridership_24_ts,lag.max = 12, main = "", lwd = 5, col = "lightblue")
 # The strongest ac is negative and at lag 6: biannual pattern, with 6-month
-# witches from high to low ridership (high summer, low winter)
+# switches from high to low ridership (high summer, low winter)
 plot(window(ridership_ts, start = start(ridership_ts),
             end = start(ridership_ts) + c(0, 47)))
 
@@ -85,7 +85,7 @@ summary(train_lm_trend_season)
 
 Acf(residuals(train_lm_trend_season),lag.max = 12, main = "", lwd = 5, 
     col = "lightblue")
-# It's clear that the 6-month (nor 12-month) cyclical behaiour no longer
+# It's clear that the 6-month (nor 12-month) cyclical behaviour no longer
 # dominates the series of residuals: the regression model captured them right
 # The still high lag-1 ac is valuable info that can be used to improve
 # forecasting
@@ -102,7 +102,7 @@ Acf(residuals(train_lm_trend_season),lag.max = 12, main = "", lwd = 5,
 #   series
 
 # AR as a 2nd-layer Model
-# 1 - Generate a k-stp-ahead Forecast F_t+k using some forecasting method
+# 1 - Generate a k-step-ahead Forecast F_t+k using some forecasting method
 # 2 - Generate k-step-ahead of the forecast error e_t+k using an AR 
 #     (or other) model
 # 3 - Improve the initial model adjusting it acoording to the second model:
