@@ -1,0 +1,157 @@
+---
+title: "Time Series Clustering with TSClust"
+author: "Miguel Conde"
+date: "1 de marzo de 2017"
+output: html_document
+---
+
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE,
+                      fig.align = "center")
+```
+
+```{r}
+pacman::p_load(TSclust)
+```
+
+
+## An example with a synthetic dataset
+
+Loading the dataset and creating the true solution
+```{r}
+data("synthetic.tseries")
+str(synthetic.tseries)
+
+true_cluster <- rep(1:6, each = 3)
+```
+
+Testing the dissimilarity measure dIP , that computes the L2 distance between integrated periodograms
+```{r}
+IP.dis <- diss(synthetic.tseries, "INT.PER")
+
+```
+
+Now, the object IP.dis contains the dissimilarity matrix computed by applying dIP to each pair of series in synthetic.tseries and can be taken as starting point for several conventional clustering methods. For example, we use hclust() of the base package stats to conduct a hierarchical clustering algorithm. We get the six cluster solution from the hierarchical clustering using the cutree() function of stats.
+
+```{r}
+IP.hclus <- cutree(hclust(IP.dis), k = 6)
+IP.hclus
+```
+
+```{r}
+cluster.evaluation(true_cluster, IP.hclus)
+```
+
+As the correct number of clusters is known, a partitive clustering technique as the popular Partitioning Around Medoids (PAM) algorithm is also considered. We use the function pam() in package cluster.
+
+```{r}
+library("cluster")
+IP.pamclus <- pam(IP.dis, k = 6)$clustering
+IP.pamclus
+```
+
+```{r}
+cluster.evaluation(true_cluster, IP.pamclus)
+```
+
+Any dissimilarity function can be tested in a similar way. Consider for example the dissimilarity based on the simple autocorrelations dACF .
+
+```{r}
+ACF.dis <- diss(synthetic.tseries, "ACF", p = 0.05)
+ACF.hclus <- cutree(hclust(ACF.dis), k = 6)
+cluster.evaluation(true_cluster, ACF.hclus)
+```
+
+```{r}
+ACF.pamclus <- pam(ACF.dis, k = 6)$clustering
+cluster.evaluation(true_cluster, ACF.pamclus)
+```
+
+```{r}
+ACF.hclus
+```
+
+Let us now consider the model-based dissimilarity dMAH,p. As dMAH,p produces p values obtained by testing the equality of generating ARMA-models, we can use the hierarchical algorithm pvalues.clust() based on p values.
+
+```{r}
+AR.MAH.PVAL.dis <- diss(synthetic.tseries, "AR.MAH")$p_value
+AR.MAH.PVAL.clus <- pvalues.clust(AR.MAH.PVAL.dis, significance = 0.05)
+cluster.evaluation(true_cluster, AR.MAH.PVAL.clus)
+```
+
+
+```{r}
+AR.MAH.PVAL.clus
+```
+The number of clusters is automatically established by the clustering algorithm depending on the threshold significance specified in significance.
+For instance, setting significance = 0.6 in our example, six clusters are found.
+```{r}
+pvalues.clust(AR.MAH.PVAL.dis, significance = 0.6)
+```
+
+Finally, we consider a dW -type dissimilarity measure based on nonparametric spectral approximations such as defined in Equation 1.
+
+```{r}
+LLR.dis <- diss(synthetic.tseries, "SPEC.LLR", method = "LK", n = 500)
+LLR.pam <- pam(LLR.dis, k = 6)$clustering
+cluster.evaluation(true_cluster, LLR.pam)
+```
+
+```{r}
+LLR.pam
+```
+
+As expected, a reasonably good result (only three series are misclassified) is obtained because of dW (LK ) is free of the linearity assumption, and hence it is especially robust to performclustering in the present framework.
+
+## Clustering interest rate series
+
+Our second example deals with long-term interest rate data included in TSclust and available by loading interest.rates. This dataset is formed by 18 time series of length T = 215 representing monthly long-term interest rates (10-year bonds), issued in percentages per annum, for seventeen countries and the Economic and Monetary Union (EMU). The observation period goes from January 1995 to November 2012 (OECD source: http://www.oecd.org/).
+
+Long-term government bonds are the instrument whose yield is used as the representative “interest rate” for each area, and hence these indicators are a vital tool of monetary policy and are taken into account when dealing with variables like investment, inflation, and unemployment.
+
+In particular, one of the convergence criteria required for all countries in the euro area is related to this indicator. 
+
+<FIGURE>
+
+Data in interest.rates are here used to perform clustering from two different points of view.
+
+First, the original series are clustered in accordance with the performance of the predictions at a given horizon. Identifying groups of countries with similar predictions for their longterm interest rates is a meaningful objective due to the influence of these indicators on the monetary policy actions. In any case, our application just intends illustrating the usefulness of TSclust to achieve this objective without studying this interesting issue in depth. 
+
+The proper function to carry out prediction-based clustering is diss.PRED(), which computes the L1 distance between bootstrap approximations of the h-steps-ahead forecast densities for two given time series (see dPRED,h in Equation 4). 
+
+Suppose we wish to group together the countries with similar six-months-ahead predictions (h = 6). 
+As the bootstrap mechanism requires stationarity and the time series under study are clearly non-stationary, the original series are previously transformed by using logarithms (if required) and taking an appropriate number of regular differences. 
+Bootstrap prediction-paths are generated from the transformed series, and then the prediction-paths are back-transformed to obtain bootstrap predictions
+for the original series. All these steps are automatically carried out by diss.PRED(). 
+The required arguments for this function are the horizon of interest, h, the number of bootstrap resamples, B, and how transformation must be carried out, that is if logarithms are or not taken (logarithms.x and logarithms.y) and the number of regular differences to be applied (differences.x and differences.y). We start comparing the predictions for Finland and USA (columns 13 and 16 of interest.rates, respectively).
+
+```{r}
+data("interest.rates")
+dpred <- diss.PRED(interest.rates[, 13], interest.rates[, 16], 
+                   h = 6, B = 2000,
+                   logarithm.x = TRUE, logarithm.y = TRUE, 
+                   differences.x = 1, differences.y = 1, 
+                   plot = TRUE)
+dpred$L1dist
+```
+
+```{r}
+diffs <- rep(1, ncol(interest.rates))
+logs <- rep(TRUE, ncol(interest.rates))
+dpred <- diss(interest.rates, "PRED", h = 6, B = 1200, logarithms = logs,
+              differences = diffs, plot = TRUE)
+
+
+hc.dpred <- hclust(dpred$dist)
+plot(hc.dpred)
+
+```
+
+Now, a different clustering problem based on the same interest rate dataset is posed. Specifically, we are interested in performing cluster analysis with the series transformed by taking the first difference of the logarithms which approximately measures the percentage changes in the interest rates from month to month, and therefore this new cluster analysis intends to group together those countries with similar monthly increases in their interest rates.
+
+ Note that nonstationarity of the original series has
+been removed by taking differences, and therefore dissimilarity measures constructed under
+the stationarity assumption can be used. For illustrative purposes, we perform hierarchical
+clustering with complete linkage and use several dissimilarity measures implemented in TSclust, namely the dissimilarities based on the simple autocorrelation functions, the logarithm
+of the normalized periodograms and the AR-metric
