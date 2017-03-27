@@ -16,7 +16,7 @@ ridership_ts <- ts(Amtrak_data$Ridership,
                    frequency = 12)
 plot(ridership_ts)
 
-## 7.1 AUTOCORRELATION
+# 7.1 AUTOCORRELATION -----------------------------------------------------
 # lag-1 autocorrelation
 library(zoo)
 ridership_zoo <- zoo(ridership_ts)
@@ -25,6 +25,7 @@ lag_ridership_zoo <- cbind(ridership_zoo, lag(ridership_zoo, k = h))
 names(lag_ridership_zoo) <- paste0("lag_", 0:1)
 head(lag_ridership_zoo)
 cor(lag_ridership_zoo, use = "complete.obs")
+
 
 acf(ridership_ts, plot=FALSE)$acf[2]
 library(forecast)
@@ -90,7 +91,8 @@ Acf(residuals(train_lm_trend_season),lag.max = 12, main = "", lwd = 5,
 # The still high lag-1 ac is valuable info that can be used to improve
 # forecasting
 
-## IMPROVING FORECASTS BY CAPTURING AUTOCORRELATION: AR and ARIMA MODELS
+
+# 7.2 IMPROVING FORECASTS BY CAPTURING AUTOCORRELATION: AR and ARIMA ------
 
 ## AR MODELS
 # Regression models whose predictors are the past values of the series
@@ -98,7 +100,7 @@ Acf(residuals(train_lm_trend_season),lag.max = 12, main = "", lwd = 5,
 
 # 2 approaches to take advante of autocorrelation:
 # - Directly buiding the ac into the regression model using ARIMA models
-# - Constructing a simple 2nd-oreder level forecasting model on the residual
+# - Constructing a simple 2nd-order level forecasting model on the residual
 #   series
 
 # AR as a 2nd-layer Model
@@ -188,16 +190,74 @@ accuracy(fitted_m, valid_ts)
 
 ## ARIMA MODELS
 
+# An ARIMA(p, d, q) model directly models:
+# - The autocorrelation of the series at lags 1,2,...,p
+#   AR(p):  y_t = beta_0 + beta_1 x y_t-1 + beta_2 x y_t-1 + error_t
+# - The autocorrelation of the forecast errors (called "moving average") upto
+#   lag q:
+#   MA(q): y_t = theta_1 x error_t-1 + theta_2 x error_t-2 +...+ theta_q x error_t-q
+#
+# AR and ARMA models can only be fitted to data with NO TREND NOR SEASONALITY
+#
+# - To remove trend a preliminary differencing step is incorporated 
+#   I(d): d = 0 means no differencing, d = 1 removes a lineal trenf, d = 2 a
+#         quadratic one, etc.
+#
+#   Seasonal ARIMA models incorporate a preliminary differencing step to 
+#   remove trend.
+# 
 
 
+# 7.3 EVALUATING PREDICTABILITY -------------------------------------------
+
+# Before forecast: is a time series predictable? (i.e., its past predicts its
+# future?)
+# To answer, we can test if the time series is a random walk (a special case of
+# AR(1)):
+#         y_t = beta_0 + y_t-1 + error_t
+#
+# To test if a series is a random walk:
+# - Fit an AR(1) model
+# - Test the hypothesis H_0: beta_1 = 1.
+# - If rejected, the series is not a random walk and we can attempt to predict
+#   it (beyond a naive forecast).
+
+# Example
+
+summary(train_res_arima)
+
+# The slope coefficient `ar1` is more than 5 standard errors away from 1,
+# indicating that it is not a random walk.
+
+# Example
+library(quantmod)
+getSymbols('^GSPC', from='1990-01-01')
+GSPC <- adjustOHLC(GSPC, symbol.name='^GSPC')
+summary(Arima(Cl(GSPC), order = c(1, 0, 0)))
+
+# The coefficient is sufficiently close to 1 (around 1 standard error away)
+# indicating that it is a random walk
+
+summary(Arima(ClCl(GSPC), order = c(1, 0, 0)))
+# The slope coefficient `ar1` is more than 5 standard errors away from 1,
+# indicating that it is not a random walk.
+
+## Another approach: 
+#  Examine the lag-1 differenced series. As a random walk is a constant plus 
+#  a random term, the ACF of a lag-1 differenced series should indicate that 
+#  autocorrelations at all lags should be aprox. zero (all the bars within the 
+#  thresholds)
 
 
+## A more advance way; Augmented Dicker-Fuller test, tseries::adf.test()
 
-## EVALUATING PREDICTABILITY
+
+## Example
 library(tseries)
 adf.test(ridership_ts)
 # So we reject H_0 (H_0: ridership_ts is not stationary) and turn to H_a:
 # ridership_ts is stationary (i.e., it's not a random walk)
+
 
 Acf(diff(ridership_ts)) # some ac out of the thresholds => no random walk
 
@@ -210,5 +270,486 @@ adf.test(Cl(GSPC)) # Non stationary
 adf.test(ClCl(GSPC)[-1]) # Stationary
 
 
-Acf(diff(Cl(GSPC))) # some ac out of the thresholds => not a random walk
-Acf(ClCl(GSPC)) # no ac out of the thresholds => random walk
+Acf(diff(Cl(GSPC))) # none ac out of the thresholds =>  a random walk
+Acf(diff(ClCl(GSPC))) # lag-1 ac out of the thresholds => not a random walk
+
+
+# 7.4 INCLUDING EXTERNAL INFORMATION --------------------------------------
+
+# We've seen linear regression models capturing trend, seasonality and
+# autocorrelation (via autoregresive models).
+# Now we'll learn that they can capture aditional types of patterns: outliers,
+# special events, interventions and policy changes and correlations with
+# other series.
+
+## OUTLIERS
+#  - Fit the model with and without outliers and analyse how predictive
+#    performance is affected.
+#    * If dropping the outliers has not much effect: fit the model with the 
+#      outliers.
+#    * Else:
+#           + Remove these periods and fit the model without them
+#             Regressions models can do it directly.
+#             Smoothing models: replace the outliers with forecasts or
+#             imputed values (e.g., using a centered moving average)
+#           + OR: label the outliers usisng a dummy variable
+
+## SPECIAL EVENTS
+
+## INTERVENTIONS
+
+## CORRELATED EXTERNAL SERIES
+#
+#  Two step procedure:
+#
+# 1 - Remove trend and seasonality from both series - the series of interest
+#     y_t and the external series x_t. Let y*_t and x*_t the resulting series.
+# 2 - Fit a regression model of y*_t with pedictors that are lags of y*_t 
+#     and / or x*_t
+#
+# Note #1: Lagged or forecasted predictors
+#          The model should include EITHER lagged versions of the external
+#          series x_t-1, x_t-2,... OR their forecasts when they are not
+#          available at the time of prediction.
+#
+# Note #2: Data availability at time of prediction
+#          It is advantageous to update the model as new information arrives.
+#          This assumes that the model is trained only on data available at
+#          the time of prediction. The training period must therefore take
+#          into account data availability and the forecast horizon.
+
+
+## Example 3: Forecasting BIKE RENTALS
+library(lubridate)
+
+bike.df <- read.csv("./DATA/BikeSharing_day.csv")
+
+bike.df$Date       <- as.Date(bike.df$dteday, format = "%Y-%m-%d")
+bike.df$Month      <- month(bike.df$Date, label = TRUE)
+bike.df$DOW        <- wday(bike.df$Date,  label = TRUE)
+bike.df$WorkingDay <- factor(bike.df$workingday, 
+                             levels = c(0, 1),
+                             labels = c("Not_Working", "Working"))
+bike.df$Weather    <- factor(bike.df$weathersit, 
+                             levels = c(1, 2, 3),
+                             labels = c("Clear", "Mist", "Rain_Snow"))
+
+Month.dummies              <- model.matrix(~ 0 + Month, data = bike.df)
+DOW.dummies                <- model.matrix(~ 0 + DOW,   data = bike.df)
+WorkingDay_Weather.dummies <- model.matrix(~ 0 + WorkingDay:Weather, 
+                                           data = bike.df)
+
+colnames(Month.dummies) <- gsub("Month", "", colnames(Month.dummies))
+colnames(DOW.dummies)   <- gsub("DOW",   "", colnames(DOW.dummies))
+colnames(WorkingDay_Weather.dummies) <- gsub("WorkingDay", "", 
+                                             colnames(WorkingDay_Weather.dummies))
+colnames(WorkingDay_Weather.dummies) <- gsub("Weather", "", 
+                                             colnames(WorkingDay_Weather.dummies))
+colnames(WorkingDay_Weather.dummies) <- gsub(":", "_", 
+                                             colnames(WorkingDay_Weather.dummies))
+
+x <- as.data.frame(cbind(Month.dummies[, -12],
+                         DOW.dummies[, -7],
+                         WorkingDay_Weather.dummies[, -6]))
+y <- bike.df$cnt
+
+nTotal <- length(y)
+nValid <- 90
+nTrain <- nTotal - nValid
+
+xTrain <- x[1:nTrain, ]
+xValid <- x[(nTrain+1):nTotal, ]
+yTrain <- y[1:nTrain]
+yValid <- y[(nTrain+1):nTotal]
+
+yTrain.ts <- ts(yTrain)
+
+f <- paste("yTrain.ts", paste(c("trend", colnames(xTrain)),  collapse = "+"), 
+           sep = "~")
+f
+(formula <- as.formula(f))
+
+bike.tslm <- tslm(formula, data = xTrain, lambda = 1)
+
+bike.tslm.pred <- forecast(bike.tslm, newdata = xValid)
+
+plot(bike.tslm.pred, ylim = c(0, 9000),
+     xlab = "Days", ylab ="Daily Bike Rentals")
+
+summary(bike.tslm)
+mCoef <- coef(bike.tslm)
+
+# The number of daily bike rentals on a clear non-working day on average will
+# be 3220.48 higher than on a rainy/snowy non-working day
+as.numeric(mCoef["Not_Working_Clear"] - mCoef["Not_Working_Rain_Snow"])
+
+
+## Example 4: Forecasting Walmart Sales by Store and by Department
+#
+# We want to quantify the effect of holidays on the average weekly sales from
+# one store-department pais (Store 1 and Dpt 6). We'll use the complete
+# 143 weeks.
+walmart_data <- read.csv("./DATA/Walmart_train.csv")
+str(walmart_data)
+one_pair <- subset(walmart_data, (Store == 1 & Dept == 6),
+                   select = c(Date, Weekly_Sales, IsHoliday))
+
+nTrain <- nrow(one_pair)
+
+walmart_data <- read.csv("./DATA/Walmart_test.csv")
+one_pair_tst <- subset(walmart_data, (Store == 1 & Dept == 6),
+                       select = c(Date, IsHoliday))
+nTest <- nrow(one_pair_tst) 
+
+rm(walmart_data)
+
+yTrain.ts <- ts(one_pair$Weekly_Sales[1:nTrain, ], start = c(2010, 5), frequency = 52)
+plot(yTrain.ts)
+
+stl.run <- stl(yTrain.ts, s.window = "periodic")
+plot(stl.run) # Watch week of year seasonality
+
+Acf(one_pair$Weekly_Sales) # Watch relevant lag-1 and lag-4 acs
+
+# To fit an ARIMA model (to capture autocorrelation) we must first 
+# deseasonalize the weekly sales before including external info.
+#
+# After deseasonalize, we fit an ARIMA model to the deseasonalized series 
+# that includes IsHoliday as an aditional predictor.
+#
+# We finally examine the coeficient of Is Holiday to quantify its effect
+
+
+# 1 - USING STLM
+#
+xTrain <- data.frame(IsHoliday = one_pair$IsHoliday)
+stlm.reg.fit <- stlm(yTrain.ts, 
+                     s.window = "periodic", 
+                     xreg = xTrain, 
+                     method = "arima")
+stlm.reg.fit$model
+
+## 2 - EQUIVALENT ALTERNATIVE APPROACH TO stlm()
+#
+# Ia. Deseasonalize, approach 1
+seasonal.comp <- stl.run$time.series[, "seasonal"]
+deseasonalized.ts <- yTrain.ts - seasonal.comp
+
+# Ib Deseasonalize, approach 2
+deseasonalized.ts <- seasadj(stl.run)
+
+# II - Fit an ARIMA model with external predictors to the deseasonalized
+# series
+arima.fit.deas <- auto.arima(deseasonalized.ts, xreg = xTrain)
+
+# III - Make a forecast using the ARIMA model
+xTest <- data.frame(IsHoliday = one_pair_tst$IsHoliday)
+arima.fit.deas.pred <- forecast(arima.fit.deas, xreg = xTest, h = nTest)
+
+# IV Forecast the seasonal component from the stl decomposition using a
+# seasonal naive forecast
+seasonal.comp.pred <- snaive(seasonal.comp, h = nTest)
+
+# V - Add the ARIMA model's forecast of the deseasonalized series to the
+# sesasonal naive forecast of the seasonal component
+alt.forecast <- arima.fit.deas.pred$mean + seasonal.comp.pred$mean
+
+
+# Plot forecast
+stlm.reg.pred <- forecast(stlm.reg.fit, xreg = xTest, h = nTest)
+plot(stlm.reg.pred, xlab = "Year", ylab = "Weekly Sales")
+
+## Check results are equal
+stlm.reg.pred$mean - alt.forecast
+
+## Analysis
+# The ARIMA models are 
+stlm.reg.fit$model
+arima.fit.deas
+
+# The external predictor, IsHoliday, turns out to be statistically 
+# insignificant: its coefficient
+coef(arima.fit.deas)["IsHoliday"]
+
+# is only 
+coef(arima.fit.deas)["IsHoliday"]/arima.fit.deas$var.coef[3,3]
+# standard errors (s.e.) away from zero. Hence, we conclude that once
+# weekly seasonality is accounted for, the holiday information does not
+# contribute further information about weekly sales in this store-department 
+# pair
+
+
+
+# 7.5 - PROBLEMS ----------------------------------------------------------
+
+## 1 - Analysis of Canadian Manufacturing Workers Work-Hours.
+
+CanadianWorkHours <- read_excel("D:/PROYECTOS DATA SCIENCE/TSA_book/DATA/CanadianWorkHours.xls")
+
+CWH_ts <- ts(CanadianWorkHours$`Hours per week`, 
+             start = c(1966), end = c(2000),
+             frequency = 1)
+plot(CWH_ts,
+     xlab = "Year", ylab = "Hours per Week", 
+     main = "Canadian Hours per Week",
+     bty = "l")
+
+# a) If we computed the autocorrelation of this series, would the lag-1
+#    autocorrelation exhibit negative, positive or no autocorrelation? How can 
+#    you see this from the plot?
+
+# There are two clear trends (upto and from 1989, more or less). Usually a trend 
+# in the data will show in the correlogram as a slow decay in the 
+# autocorrelations, due to similar values in the series occurring close together 
+# in time. So, lag-1 should be significative and positive
+
+# b) Compute de autocorrelation and produce an ACF plot. Verify your answer to 
+#    the previous question.
+acf(CWH_ts)
+Acf(CWH_ts)
+
+## 2 - Forecasting Wal-Mart Stock
+library(readxl)
+WalMartStock <- read_excel("D:/PROYECTOS DATA SCIENCE/TSA_book/DATA/WalMartStock.xls")
+
+WMS_ts <- ts(WalMartStock$Close, 
+             start = c(2001, 2),
+             frequency = 365)
+plot(WMS_ts,
+     xlab = "Time", ylab = "Closing Price", 
+     main = "Wal-Mart Daily Closing Prices",
+     bty = "n")
+
+library(forecast)
+Acf(WMS_ts, lag.max = 10)
+Acf(diff(WMS_ts), lag.max = 10)
+
+WMS_AR1   <-  Arima(WMS_ts,       order = c(1, 0, 0))
+WMS_AR1
+
+WMS_AR1_D <-  Arima(diff(WMS_ts), order = c(1, 0, 0))
+WMS_AR1_D
+
+# a) Create a time plot of the differenced series
+plot(diff(WMS_ts),
+     xlab = "Time", ylab = "Diff Closing Price", 
+     main = "Wal-Mart Diff Daily Closing Prices",
+     bty = "n")
+
+# b) Which of the following is/are relevant for testing wether this stock is a
+#    random walk?
+
+# - The autocorrelation of the closing price series
+
+# - The AR(1) slope coefficient for the closing price series
+# YES
+summary(WMS_AR1)
+(1 - 0.9558) / 0.0187 > qnorm(0.975) # ar1 more than 1.96 ses away from 1, it's not a rw
+(1 - 0.9558) / 0.0187 > qnorm(0.995) # ar1 less than 2.58 ses away from 1, it's a rw
+# ar1 less than 5 standard errors away from 1, it's a rw
+
+# - The AR(1) constant coefficient for the closing price series
+
+# - The autocorrelation of the differenced series
+# YES
+#  As a random walk is a constant plus 
+#  a random term, the ACF of a lag-1 differenced series should indicate that 
+#  autocorrelations at all lags should be aprox. zero (all the bars within the 
+#  thresholds)
+
+# - The AR(1) slope coefficient for the differenced series
+
+# - The AR(1) constant coefficient for the differenced series
+
+# As a plus:
+adf.test(WMS_ts)       # Non stationary => could be a rw
+adf.test(diff(WMS_ts)) # Stationary => can't be a rw
+
+# c) Does the AR(1) model for the Close price series indicate that this is a 
+# random walk?
+# With a confidence level of 95% (~2   s.e.'s): it's not a rw
+# With a confidence level of 99% (~2.5 s.e.'s): it's a rw
+# With a confidence level of 5 s.e.'s: it's a rw
+
+# d) What are the implications of finding that a series is a random walk?
+
+# If the series is not a random walk then we can attempt to predict
+# it (beyond a naive forecast)
+
+# If it's a rw:
+
+# - It is impossible to obtain useful forecasts of the series
+# OK
+# - The series is random
+# The changes in the series from one period to the other are ranodm
+# OK
+
+# 3 - Souvenir Sales
+SouvenirSales <- read_excel("D:/PROYECTOS DATA SCIENCE/TSA_book/DATA/SouvenirSales.xls")
+
+SS_ts <- ts(SouvenirSales$Sales, 
+             start = c(1995, 1),
+             frequency = 12)
+plot(SS_ts,
+     xlab = "Time", ylab = "Sales", 
+     main = "Souvenir Sales",
+     bty = "n", type = "o")
+
+##
+library(lubridate)
+SS_df <- SouvenirSales[, c("Date", "Sales")]
+SS_df$Month <- month(as.Date(SS_df$Date, format = "%Y-%m-%d"), label = TRUE)
+
+Month.dummies <- model.matrix(~ 0 + Month, data = SS_df)
+colnames(Month.dummies) <- gsub("Month", "", colnames(Month.dummies))
+
+nTotal <- length(SS_ts)
+nValid <- 12
+nTrain <- nTotal - nValid
+
+x <- as.data.frame(Month.dummies[, -12])
+y <- log(SS_df$Sales)
+
+SS_train_y <- y[1:nTrain]
+SS_valid_y <- y[(nTrain+1):nTotal]
+
+SS_train_x <- x[1:nTrain, ]
+SS_valid_x <- x[(nTrain+1):(nTrain+nValid), ]
+
+
+# a) Run a regression model with log(Sales) as the output variable and with a 
+#    linear trend and monthly predictors. Use this model to forecast the sales
+#    in February 2002
+yTrain.ts <- ts((SS_train_y), start = start(SS_ts), freq = 12)
+
+f <- paste("yTrain.ts", paste(c("trend", colnames(SS_train_x)),  collapse = "+"), 
+           sep = "~")
+f
+(formula <- as.formula(f))
+
+SS.tslm <- tslm(formula, data = SS_train_x, lambda = 1)
+summary(SS.tslm)
+
+SS.tslm.pred <- forecast(SS.tslm, newdata = SS_valid_x)
+
+# b) Create en ACF plot until lag-15 for the forecast errors.
+Acf(residuals(SS.tslm), lag.max = 15)
+
+# Now fit an AR model with lag-2 ARIMA(2,0,0) to the forecasts errors
+SS.AR2.FE <- Arima(residuals(SS.tslm), c(2,0,0))
+summary(SS.AR2.FE)
+
+# b.i) Examining the ACF plot and the estimated coefficients of the AR(2)
+# model (and their statistical significance), what can we learn about the 
+# regression forecasts?
+
+# if we had right modeled the seasonal pattern, the residual series should 
+# show no ac at the season lag: and that's the case.
+# ar1 and ar2 are aprox. 6-7 s.e.'s from 1 => the residuals series is not a random walk
+
+# b.ii)
+SS.AR2.FE.pred <- forecast(SS.AR2.FE, h = nValid)
+
+fitted2 <- exp(fitted(SS.tslm) + fitted(SS.AR2.FE))
+pred2   <- exp(SS.tslm.pred$mean + SS.AR2.FE.pred$mean)
+
+plot(SS_ts,
+     xlab = "Time", ylab = "Sales", 
+     main = "Souvenir Sales",
+     bty = "n", type = "o")
+abline(v = 2001, col = "red", lty = 3)
+abline(v = 2002, col = "red", lty = 3)
+
+lines(fitted2, lwd = 2, col = "blue")
+lines(pred2, lwd = 2, col = "blue", lty = 2)
+
+accuracy(fitted2, SS_train_y)
+accuracy(pred2, SS_valid_y)
+
+## 5 - Shipments of Household Appliances.
+library(readxl)
+SHA <- read_excel("D:/PROYECTOS DATA SCIENCE/TSA_book/DATA/ApplianceShipments.xls")
+
+SHA_ts <- ts(SHA$Shipments, 
+             start = c(1985, 1),
+             frequency = 4)
+plot(SHA_ts,
+     xlab = "Time", ylab = "Quarterly Shipments (Millions US$)", 
+     main = "Quarterly Shipments \nof U.S. household appliances",
+     xaxt = "n", bty = "n", type = "o")
+
+labs <- unlist(lapply(1985:1989, paste, c("Q1", "Q2", "Q3", "Q4")))
+at_seq <- seq(1985, 1989.75, 0.25)
+
+axis(1, at = at_seq, labels = FALSE)
+text(seq(1985, 1989.75, 0.25), par("usr")[3] - 50, srt = 45, adj = 1,
+     labels = labs, xpd = TRUE, cex = 0.8)
+
+# If we compute the autocorrelation of the series, which lag (>0) is most
+# likely to have the largest value (in absolute value)? Create an ACF plot
+# and compare it with your answer
+library(forecast)
+Acf(SHA_ts)
+Acf(diff(SHA_ts))
+
+## 5 - Forecasting Australian Wines Sales
+library(readxl)
+AW <- read_excel("D:/PROYECTOS DATA SCIENCE/TSA_book/DATA/AustralianWines.xls")
+AW$`Source: Website` <- NULL
+
+AW_ts <- ts(AW$Fortified, 
+             start = c(1980, 1), end = c(1994, 12),
+             frequency = 12)
+plot(AW_ts,
+     xlab = "", ylab = "Sales", 
+     main = "Fortified monthly sales", bty = "n", type = "l", xaxt = "n")
+
+labs <- c(unlist(lapply(1980:1994, paste, "Jan")), "")
+at_seq <- seq(1980, 1995, 1)
+axis(side = 1, at = at_seq, labels = labs, las = 2)
+
+# a)
+
+nValid <- 12
+nTotal <- length(AW_ts)
+nTrain <- nTotal - nValid
+
+AW_train_ts <- window(AW_ts, start = start(AW_ts), 
+                      end = c(start(AW_ts)[1], nTrain))
+AW_valid_ts <- window(AW_ts, start = c(end(AW_train_ts)[1], 
+                                       end(AW_train_ts)[2]+1),
+                      end = end(AW_ts))
+
+AW_lm_trend_season <- tslm(AW_train_ts ~ trend + season)
+summary(AW_lm_trend_season)
+
+AW_lm_trend_season_pred <- forecast(AW_lm_trend_season, h = nValid)
+
+abline(v = 1994, col = "red", lty = 3)
+abline(v = 1995, col = "red", lty = 3)
+
+lines(fitted(AW_lm_trend_season), lwd = 2, col = "blue")
+lines(AW_lm_trend_season_pred$mean, lwd = 2, col = "blue", lty = 2)
+
+# b)
+
+Acf(residuals(AW_lm_trend_season))
+
+# There is a strong correlation between sales on the same calendar month
+# The model does not capture the seasonality well (if we had right modeled the 
+# seasonal pattern, the residual series should show no ac at the season lag)
+
+
+
+
+#### 
+
+names(AW) <- c("Month", "Fortified", "Red", "Rose", "Sparkling", "Sweet_White", "Dry_White")
+
+AW_train_ts2 <- window(AW_train_ts, 
+                       start = c(start(AW_ts)[1],start(AW_ts)[2]+1), 
+                      end = end(AW_train_ts))
+
+m <- tslm(AW_train_ts2 ~ trend + season + Red + Rose + Sparkling + Sweet_White + Dry_White, 
+          data = AW[1:(nTrain-1),3:7])
+summary(m)
