@@ -304,7 +304,7 @@ Acf(diff(ClCl(GSPC))) # lag-1 ac out of the thresholds => not a random walk
 #
 # 1 - Remove trend and seasonality from both series - the series of interest
 #     y_t and the external series x_t. Let y*_t and x*_t the resulting series.
-# 2 - Fit a regression model of y*_t with pedictors that are lags of y*_t 
+# 2 - Fit a regression model of y*_t with predictors that are lags of y*_t 
 #     and / or x*_t
 #
 # Note #1: Lagged or forecasted predictors
@@ -313,7 +313,7 @@ Acf(diff(ClCl(GSPC))) # lag-1 ac out of the thresholds => not a random walk
 #          available at the time of prediction.
 #
 # Note #2: Data availability at time of prediction
-#          It is advantageous to update the model as new information arrives.
+#          It is adventageous to update the model as new information arrives.
 #          This assumes that the model is trained only on data available at
 #          the time of prediction. The training period must therefore take
 #          into account data availability and the forecast horizon.
@@ -403,7 +403,8 @@ nTest <- nrow(one_pair_tst)
 
 rm(walmart_data)
 
-yTrain.ts <- ts(one_pair$Weekly_Sales[1:nTrain, ], start = c(2010, 5), frequency = 52)
+yTrain.ts <- ts(one_pair$Weekly_Sales[1:nTrain], start = c(2010, 5), 
+                frequency = 52)
 plot(yTrain.ts)
 
 stl.run <- stl(yTrain.ts, s.window = "periodic")
@@ -682,7 +683,7 @@ labs <- unlist(lapply(1985:1989, paste, c("Q1", "Q2", "Q3", "Q4")))
 at_seq <- seq(1985, 1989.75, 0.25)
 
 axis(1, at = at_seq, labels = FALSE)
-text(seq(1985, 1989.75, 0.25), par("usr")[3] - 50, srt = 45, adj = 1,
+text(at_seq, par("usr")[3] - 50, srt = 45, adj = 1,
      labels = labs, xpd = TRUE, cex = 0.8)
 
 # If we compute the autocorrelation of the series, which lag (>0) is most
@@ -708,7 +709,11 @@ labs <- c(unlist(lapply(1980:1994, paste, "Jan")), "")
 at_seq <- seq(1980, 1995, 1)
 axis(side = 1, at = at_seq, labels = labs, las = 2)
 
-# a)
+# a) Focus on fortified wine alone and produce as accurate as possible
+#    forecasts for the next 2 months.
+
+# Start by partitioning the data using the period until dec-1993 as the 
+# training period
 
 nValid <- 12
 nTotal <- length(AW_ts)
@@ -720,10 +725,14 @@ AW_valid_ts <- window(AW_ts, start = c(end(AW_train_ts)[1],
                                        end(AW_train_ts)[2]+1),
                       end = end(AW_ts))
 
+# Fit a regression model to sales with a linear trend and seasonality
+library(forecast)
 AW_lm_trend_season <- tslm(AW_train_ts ~ trend + season)
 summary(AW_lm_trend_season)
 
+# i. Create the "actual vs. forecast" plot. What can you say about model fit?
 AW_lm_trend_season_pred <- forecast(AW_lm_trend_season, h = nValid)
+AW_lm_trend_season_pred
 
 abline(v = 1994, col = "red", lty = 3)
 abline(v = 1995, col = "red", lty = 3)
@@ -731,16 +740,23 @@ abline(v = 1995, col = "red", lty = 3)
 lines(fitted(AW_lm_trend_season), lwd = 2, col = "blue")
 lines(AW_lm_trend_season_pred$mean, lwd = 2, col = "blue", lty = 2)
 
-# b)
+# ii. Use the regression model to forecast sales in january and february 94
+window(AW_lm_trend_season_pred$mean, start = c(1994,1), end = c(1994,2))
 
-Acf(residuals(AW_lm_trend_season))
+# b) Create anACF plot for the residuals from the above model until lag-12
+Acf(residuals(AW_lm_trend_season), lag.max = 12)
+
+# i. Examining this plot, which of the following statements are reasonable?
 
 # There is a strong correlation between sales on the same calendar month
 # The model does not capture the seasonality well (if we had right modeled the 
 # seasonal pattern, the residual series should show no ac at the season lag)
 
+# ii. How can you handle the above effect without adding another layer to your
+# model?
 
-
+# The other approach is directly building the ac into the regression model 
+# using ARIMA models
 
 #### 
 
@@ -753,3 +769,330 @@ AW_train_ts2 <- window(AW_train_ts,
 m <- tslm(AW_train_ts2 ~ trend + season + Red + Rose + Sparkling + Sweet_White + Dry_White, 
           data = AW[1:(nTrain-1),3:7])
 summary(m)
+
+## 6 - Forecasting Weekly Sales at Walmart
+
+WTrain <- read.csv("D:/PROYECTOS DATA SCIENCE/TSA_book/DATA/Walmart_train.csv")
+WTest  <- read.csv("D:/PROYECTOS DATA SCIENCE/TSA_book/DATA/Walmart_test.csv")
+WFeat  <- read.csv("D:/PROYECTOS DATA SCIENCE/TSA_book/DATA/Walmart_features.csv")
+
+# Subset Department #27 of Walmart Store 1
+WTrain <- subset(WTrain, subset = (Store == 1 & Dept == 27))
+WTest  <- subset(WTest,  subset = (Store == 1 & Dept == 27))
+WFeat  <- subset(WFeat,  subset = (Store == 1))
+
+dim(WTrain) ; dim(WTest); dim(WFeat)
+
+# Merge train and test sets
+WTrain <- merge(WTrain, WFeat[1:143, ], by = c("Store", "Date", "IsHoliday"))
+WTest  <- merge(WTest,  WFeat[144:182, ], by = c("Store", "Date", "IsHoliday"))
+
+# We are interested in creating a forecasting model for weekly sales for the
+# next 52 weeks
+
+# (a) - Recreate the time plot of the weekly sales data. Which systematic
+#       patterns appear in this series?
+
+WS_ts <- ts(WTrain$Weekly_Sales, 
+            start = c(2010, 2), frequency = 52)
+plot(WS_ts,
+     xlab = "", ylab = "Sales", 
+     main = "Weekly Sales in Department #27 of Walmart Store 1", 
+     bty = "n", type = "l", xaxt = "n")
+
+labs <- format(as.Date(WTrain$Date[1]) %m+% months(0:32))
+at_seq = seq((2010+2/52), (2010+nrow(WTrain)/52), length.out = 33)
+
+axis(1, at = at_seq, labels = FALSE)
+text(at_seq, par("usr")[3] - 150, srt = 45, adj = 1,
+     labels = labs, xpd = TRUE, cex = 0.8)
+
+# (b) Create time plots of the other numerical series (Temperature, Fuel_Price,
+#     CPI and Unemployement)
+
+par(mfrow = c(2, 2))
+
+# TEMPERATURE
+WS_Temp_ts <- ts(WTrain$Temperature, 
+                 start = c(2010, 2), frequency = 52)
+plot(WS_Temp_ts,
+     xlab = "", ylab = "Temperature (K)", 
+     main = "Weekly Temperature in Department #27 of Walmart Store 1", 
+     bty = "n", type = "l", xaxt = "n")
+
+axis(1, at = at_seq, labels = FALSE)
+text(at_seq, par("usr")[3] - 1.5, srt = 45, adj = 1,
+     labels = labs, xpd = TRUE, cex = 0.8)
+
+# FUEL PRICE
+WS_Fuel_ts <- ts(WTrain$Fuel_Price, 
+                 start = c(2010, 2), frequency = 52)
+plot(WS_Fuel_ts,
+     xlab = "", ylab = "Fuel Price ($)", 
+     main = "Weekly Fuel Price in Department #27 of Walmart Store 1", 
+     bty = "n", type = "l", xaxt = "n")
+
+axis(1, at = at_seq, labels = FALSE)
+text(at_seq, par("usr")[3] - 0.05, srt = 45, adj = 1,
+     labels = labs, xpd = TRUE, cex = 0.8)
+
+# CPI
+WS_CPI_ts <- ts(WTrain$CPI, 
+                 start = c(2010, 2), frequency = 52)
+plot(WS_CPI_ts,
+     xlab = "", ylab = "CPI", 
+     main = "Weekly CPI in Department #27 of Walmart Store 1", 
+     bty = "n", type = "l", xaxt = "n")
+
+axis(1, at = at_seq, labels = FALSE)
+text(at_seq, par("usr")[3] - 0.5, srt = 45, adj = 1,
+     labels = labs, xpd = TRUE, cex = 0.8)
+
+# UNEMPLOYEMENT
+WS_Une_ts <- ts(WTrain$Unemployment, 
+                start = c(2010, 2), frequency = 52)
+plot(WS_Une_ts,
+     xlab = "", ylab = "Unemployment", 
+     main = "Weekly Unemployment in Department #27 of Walmart Store 1", 
+     bty = "n", type = "l", xaxt = "n")
+
+axis(1, at = at_seq, labels = FALSE)
+text(at_seq, par("usr")[3] - 0.05, srt = 45, adj = 1,
+     labels = labs, xpd = TRUE, cex = 0.8)
+
+par(mfrow = c(1, 1))
+
+# Also create scatter plots of the sales series against each of these four
+# series (each point in the scatter plot will be a week). From the charts,
+# which of the four series would potentially be useful as external predictors
+# in a regression model for forecasting sales?
+par(mfrow = c(2, 2))
+plot(WTrain$Weekly_Sales, WTrain$Temperature,
+     xlab = "Weekly Sales", ylab = "Temperature(K)")
+plot(WTrain$Weekly_Sales, WTrain$Fuel_Price,
+     xlab = "Weekly Sales", ylab = "Fuel Price")
+plot(WTrain$Weekly_Sales, WTrain$CPI,
+     xlab = "Weekly Sales", ylab = "CPI")
+plot(WTrain$Weekly_Sales, WTrain$Unemployment,
+     xlab = "Weekly Sales", ylab = "Unemployment")
+par(mfrow = c(1, 1))
+
+cor(WTrain$Weekly_Sales, WTrain$Temperature)
+cor(WTrain$Weekly_Sales, WTrain$Fuel_Price)
+cor(WTrain$Weekly_Sales, WTrain$CPI)
+cor(WTrain$Weekly_Sales, WTrain$Unemployment)
+
+intVars <- c("Weekly_Sales", "Temperature", "Fuel_Price", "CPI", "Unemployment")
+cor(WTrain[, intVars])
+
+# Fuel_Price, CPI and Unemployement are strongly corralated. Only one of them
+# should be used as predictor.
+# Weekly_Sales is mostly correlated to Temperature, which, in turn, has not
+# much to do with Fuel_Price, CPI or Unemployement.
+#
+# I should use Temperature or Temperature and Fuel_price
+
+library(psych)
+pairs.panels(WTrain[, intVars])
+
+## (c) The period to forecast is November 2, 2012 to July 26, 2013. For which
+#      of the series does the file include data for the forecasting period. For
+#      which of the series is there no data for this period? Explain why.
+sapply(WTest[, intVars[intVars != "Weekly_Sales"]], function(x) {
+  sum(is.na(x))
+})
+
+# (d) How is it possible that we have Temperature for the prediction period?
+
+# (e) Treat the first 91 weeks (until Oct 28, 2011) as the training period, 
+#     and the next 52 weeks as the validation period.
+#     Create naive forecasts for the validation period. 
+nTotal <- nrow(WTrain)
+nTrain <- 91
+nValid <- nTotal - nTrain
+
+train_start <- start(WS_ts)
+train_end   <- start(WS_ts) + c(0, nTrain-1)
+valid_start <- end(train_ts) + c(0, 1)
+valid_end   <- end(WS_ts)
+
+train_ts <- window(WS_ts, start = train_start, 
+                   end = train_end)
+valid_ts <- window(WS_ts, start = valid_start,
+                   end = valid_end)
+library(forecast)
+naive_pred <- naive(train_ts, h = nValid)
+snaive_pred <- snaive(train_ts, h = nValid)
+
+# Create a time plot of these forecasts and a plot of the forecast error series.
+plot(naive_pred, bty = "n")
+lines(fitted(naive_pred), lty = 1, col = "blue")
+lines(valid_ts, lty = 2, col = "red")
+
+resid <- ts(c(residuals(naive_pred), valid_ts - naive_pred$mean),
+            start = start(train_ts), end = end(valid_ts), freq = 52)
+plot(resid, bty = "n")
+abline(v = 2010 + nTrain/52, lty = 2, col = "red")
+abline(v = 2010 + nTotal/52, lty = 2, col = "red")
+
+plot(snaive_pred, bty = "n")
+lines(fitted(naive_pred), lty = 1, col = "blue")
+lines(valid_ts, lty = 2, col = "red")
+
+resid <- ts(c(residuals(snaive_pred), valid_ts - snaive_pred$mean),
+            start = start(train_ts), end = end(valid_ts), freq = 52)
+plot(resid, bty = "n")
+abline(v = 2010 + nTrain/52, lty = 2, col = "red")
+abline(v = 2010 + nTotal/52, lty = 2, col = "red")
+
+
+# Compute the average error and RMSE
+accuracy(naive_pred,  valid_ts)
+accuracy(snaive_pred, valid_ts)
+
+
+error <- valid_ts - naive_pred$mean
+# ME
+mean(error)
+# RMSE
+sqrt(mean(error^2))
+
+error <- valid_ts - snaive_pred$mean
+# ME
+mean(error)
+# RMSE
+sqrt(mean(error^2))
+
+## (g) If we wanted to include Temperature and Fuel_Price as perdictors in the 
+#      regression model, in what form can they be included?
+
+# 1 - Remove trend and seasonality from both series - the series of interest
+#     y_t and the external series x_t. Let y*_t and x*_t the resulting series.
+
+# Remove trend and seasonality from objective and external series
+# I. Deseasonalize
+stl.sales <- stl(WS_ts, s.window = "periodic")
+sales.seasonal.comp <- stl.sales$time.series[, "seasonal"]
+sales.trend.comp    <- stl.sales$time.series[, "trend"]
+deseasonalized.sales.ts <- WS_ts - sales.seasonal.comp - sales.trend.comp
+deseasonalized.sales.train.ts <- window(deseasonalized.sales.ts,
+                                        start = train_start,
+                                        end   = train_end)
+deseasonalized.sales.valid.ts <- window(deseasonalized.sales.ts,
+                                        start = valid_start,
+                                        end   = valid_end)
+
+stl.temp <- stl(WS_Temp_ts, s.window = "periodic")
+temp.seasonal.comp <- stl.temp$time.series[, "seasonal"]
+temp.trend.comp    <- stl.temp$time.series[, "trend"]
+deseasonalized.temp.ts <- WS_Temp_ts - temp.seasonal.comp - temp.trend.comp
+deseasonalized.temp.train.ts <- window(deseasonalized.temp.ts,
+                                        start = train_start,
+                                        end   = train_end)
+deseasonalized.temp.valid.ts <- window(deseasonalized.temp.ts,
+                                        start = valid_start,
+                                        end   = valid_end)
+
+stl.fuel <- stl(WS_Fuel_ts, s.window = "periodic")
+temp.seasonal.fuel <- stl.fuel$time.series[, "seasonal"]
+temp.trend.fuel    <- stl.fuel$time.series[, "trend"]
+deseasonalized.fuel.ts <- WS_Fuel_ts - fuel.seasonal.comp - temp.trend.fuel
+deseasonalized.fuel.train.ts <- window(deseasonalized.fuel.ts,
+                                       start = train_start,
+                                       end   = train_end)
+deseasonalized.fuel.valid.ts <- window(deseasonalized.fuel.ts,
+                                        start = valid_start,
+                                        end   = valid_end)
+
+# 2 - Fit a regression model of y*_t with predictors that are lags of y*_t 
+#     and / or x*_t
+
+# Decide which lags to use
+Ccf(deseasonalized.sales.train.ts, 
+    deseasonalized.temp.train.ts, lag.max = 60) # -4, -9, -24
+Ccf(deseasonalized.sales.train.ts, 
+    deseasonalized.fuel.train.ts, lag.max = 60) # -4, -11  
+
+# Build train and valid external regressors data frames
+
+# train regressors
+des.temp_A_ts <- lag(deseasonalized.temp.train.ts, -4)
+des.temp_B_ts <- lag(deseasonalized.temp.train.ts, -9)
+des.fuel_A_ts <- lag(deseasonalized.fuel.train.ts, -4)
+des.fuel_B_ts <- lag(deseasonalized.fuel.train.ts, -11)
+
+x_train_df <- as.data.frame(cbind(deseasonalized.sales.train.ts, 
+                                  des.temp_A_ts, 
+                                  des.temp_B_ts, 
+                                  des.fuel_A_ts,
+                                  des.fuel_B_ts))[1:nTrain, -1]
+
+# valid regressors
+tmp_ts <- ts(c(deseasonalized.temp.train.ts, deseasonalized.temp.valid.ts),
+             start = train_start, end = valid_end, freq = 52)
+des.temp_A_ts <- window(lag(tmp_ts, -4), 
+                     start = valid_start, end = valid_end)
+des.temp_B_ts <- window(lag(tmp_ts, -9), 
+                     start = valid_start, end = valid_end)
+
+
+tmp_ts <- ts(c(deseasonalized.fuel.train.ts, deseasonalized.fuel.valid.ts),
+             start = train_start, end = valid_end, freq = 52)
+des.fuel_A_ts <- window(lag(tmp_ts, -4), 
+                     start = valid_start, end = valid_end)
+des.fuel_B_ts <- window(lag(tmp_ts, -11), 
+                        start = valid_start, end = valid_end)
+
+x_valid_df <- as.data.frame(cbind(deseasonalized.sales.valid.ts, 
+                                  des.temp_A_ts, 
+                                  des.temp_B_ts, 
+                                  des.fuel_A_ts,
+                                  des.fuel_B_ts))[1:nValid, -1]
+
+# Fit the model
+# II - Fit an ARIMA model with external predictors to the deseasonalized
+# series
+
+arima.fit.deas <- auto.arima(deseasonalized.sales.train.ts, xreg = x_train_df)
+
+# III - Make a forecast using the ARIMA model
+arima.fit.deas.pred <- forecast(arima.fit.deas, xreg = x_valid_df, h = nValid)
+
+# IV Forecast the seasonal component from the stl decomposition using a
+# seasonal naive forecast
+snaive_pred
+
+# V - Add the ARIMA model's forecast of the deseasonalized series to the
+# sesasonal naive forecast of the seasonal component
+alt.forecast <- arima.fit.deas.pred$mean + snaive_pred$mean
+
+
+# Plot forecast
+plot(WS_ts, xlab = "Year", ylab = "Weekly Sales", bty = "n")
+lines(alt.forecast, lty = 2, col = "red")
+abline(v = 2010 + nTrain/52, lty = 2, col = "red")
+abline(v = 2010 + nTotal/52, lty = 2, col = "red")
+
+accuracy(alt.forecast, valid_ts)
+
+## OPTION 2
+# Must remove NAs...
+train_ts2 <- window(train_ts, 
+                    start = train_start + c(0, 11))
+
+f <- paste("train_ts2", 
+           paste(c("trend", "season", colnames(x_train_df)),  collapse = "+"), 
+           sep = "~")
+f
+(formula <- as.formula(f))
+
+Wsales.tslm <- tslm(formula, data = na.exclude(x_train_df))
+
+Wsales.tslm.pred <- forecast(Wsales.tslm, newdata = x_valid_df)
+
+plot(Wsales.tslm.pred, bty = "n")
+lines(valid_ts)
+abline(v = 2010 + nTrain/52, lty = 2, col = "red")
+abline(v = 2010 + nTotal/52, lty = 2, col = "red")
+
+accuracy(Wsales.tslm.pred, valid_ts)
