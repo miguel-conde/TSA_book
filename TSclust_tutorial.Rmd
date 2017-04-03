@@ -11,6 +11,8 @@ knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE,
                       fig.align = "center")
 ```
 
+https://www.jstatsoft.org/article/view/v062i01
+
 ```{r}
 pacman::p_load(TSclust)
 ```
