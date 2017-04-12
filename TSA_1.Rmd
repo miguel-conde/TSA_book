@@ -340,3 +340,185 @@ Very smooth series exhibit autocovariance functions that stay large even when th
 
 ## Vector-Valued and Multidimensional Series
 
+## Problems
+*Section "The Nature of Time Series Data"*
+### 1.1
+```{r}
+plot(EQ5, 
+     ylab = "Maximum amplitude", 
+     xlab = "Time (s)",
+     main="Arrival phases from an earthquake and explosion", 
+     col = "blue", lty = 1)
+lines(EXP6, col = "red", lty = 2)
+legend("topleft", legend = c("Earthquake", "Explosion"),
+       col = c("blue", "red"), lty = c(1, 2), bty = "n")
+```
+
+### 1.2
+Consider a signal-plus-noise model of the general form $x_t = s_t + w_t$, where
+$w_t$ is Gaussian white noise with $\sigma_w^2 = 1$. Simulate and plot 
+$n = 200$ observations from each of the following two models:
+
+a. 
+
+$$
+s_t = \begin{cases}
+    0, & \text{t = 1,...,100}.\\
+    10e^{-\frac{(t - 100)}{20}}cos(2\pi t/4), & \text{t = 101,...,200}.
+  \end{cases}
+$$
+```{r}
+set.seed(1)
+n_obs <- 200
+w_t = rnorm(n_obs)
+s_t <- rep(0, n_obs)
+
+idx <- (n_obs/2+1):n_obs
+s_t[idx] <- 10 * exp(-(idx - 100) / 20) * cos(2*pi*idx/4)
+
+s_t <- ts(s_t + w_t)
+
+plot(s_t)
+```
+
+b. 
+
+$$
+s_t = \begin{cases}
+    0, & \text{t = 1,...,100}.\\
+    10e^{-\frac{(t - 100)}{200}}cos(2\pi t/4), & \text{t = 101,...,200}.
+  \end{cases}
+$$
+```{r}
+set.seed(1)
+n_obs <- 200
+w_t = rnorm(n_obs)
+s_t <- rep(0, n_obs)
+
+idx <- (n_obs/2+1):n_obs
+s_t[idx] <- 10 * exp(-(idx - 100) / 200) * cos(2*pi*idx/4)
+
+s_t <- ts(s_t + w_t)
+
+plot(s_t)
+```
+
+c. 
+
+```{r}
+plot(ts(exp(-(1:100) / 20)))
+plot(ts(exp(-(1:100) / 200)))
+```
+
+*Section "Time Series Statistical Models"*
+### 1.3 
+
+a. Generate $n = 100$ observations from the autoregression
+$$
+x_t = -.9x_{t-2} + w_t
+$$
+
+with $\sigma_w = 1$. Next apply the moving average filter
+
+$$
+v_t = (x_t + x_{t-1} + x_{t-2} + x_{t-3}) /4
+$$
+
+to $x_t$. Plot $x_t$ and superimpose $v_t$ as a dashed line.
+
+```{r}
+set.seed(1)
+n <- 100
+x_t <- rnorm(n)
+for (i in 3:n) {
+ x_t[i] <- -.9*x_t[i-2] + x_t[i]  
+}
+
+v_t <- filter(x_t, rep(1/4, 4), sides = 1)
+
+plot(ts(x_t))
+lines(v_t, col = "blue", lty = 2)
+```
+
+b. Repeat but with $x_t = cos(2\pi t /4)$
+```{r}
+n <- 100
+x_t <- cos(2*pi*(1:n)/4)
+
+v_t <- filter(x_t, rep(1/4, 4), sides = 1)
+
+plot(ts(x_t))
+lines(v_t, col = "blue", lty = 2)
+```
+
+
+c. Repeat but with added $N(0,1)$ noise.
+```{r}
+set.seed(1)
+n <- 100
+x_t <- cos(2*pi*(1:n)/4) + rnorm(n)
+
+v_t <- filter(x_t, rep(1/4, 4), sides = 1)
+
+plot(ts(x_t))
+lines(v_t, col = "blue", lty = 2)
+```
+
+*Section "Measures of Dependence: Autocorrelation and Cross-Correlation"*
+### 1.4
+
+### 1.5 
+For the 2 series in problem 1.2 (a) and (b):
+
+a. Compute and plot the mean function $\mu_x(t)$ for $t=1,...,200$
+
+$x_t = s_t + w_t$, where $w_t$ is Gaussian white noise with $\sigma_w^2 = 1$. 
+
+$$
+s_t = \begin{cases}
+    0, & \text{t = 1,...,100}.\\
+    10e^{-\frac{(t - 100)}{20}}cos(2\pi t/4), & \text{t = 101,...,200}.
+  \end{cases}
+$$
+$$
+\mu_x(t) = E[x_t] = E[s_t] + E[w_t] = \begin{cases}
+    0, & \text{t = 1,...,100}.\\
+    10E[e^{-\frac{(t - 100)}{20}}]E[cos(2\pi t/4)], & \text{t = 101,...,200}.
+  \end{cases}
+$$
+
+
+
+```{r}
+set.seed(1)
+n_obs <- 200
+w_t = rnorm(n_obs)
+s_t <- rep(0, n_obs)
+
+idx <- (n_obs/2+1):n_obs
+s_t[idx] <- 10 * exp(-(idx - 100) / 20) * cos(2*pi*idx/4)
+
+mu_s_t <- sapply(1:n_obs, function(x) mean(s_t[1:x]))
+
+plot(ts(mu_s_t))
+```
+
+```{r}
+s_t[idx] <- 10 * exp(-(idx - 100) / 200) * cos(2*pi*idx/4)
+
+mu_s_t <- sapply(1:n_obs, function(x) mean(s_t[1:x]))
+
+plot(ts(mu_s_t))
+```
+
+
+b. Calculate the autocovariance functions $\gamma_x(s,t)$ for $s,t = 1, ...,200$
+
+```{r}
+gamma_s_t <- sapply(1:n_obs, function(s) {
+  sapply(1:n_obs, function(t) {
+    
+  })
+})
+```
+
