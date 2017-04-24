@@ -1,0 +1,380 @@
+---
+title: "Forecasting Public Transport Demand"
+author: "Miguel Conde"
+date: "19 de abril de 2017"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 4
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE,
+                      fig.align = "center")
+```
+
+## Problem Description
+
+* A transportation company is expecting increased demand for its services.
+* In consequence, this company is planning certain investments to satisfy the
+adtional demand.
+* We need a reliable forecast of future demand to quantify the needed investment.
+* To create such forecast we have at disposal historical data, on each 15-min
+interval between 6:30 and 22:00, on the number of arriving passengers.
+
+Our aim is to create a forecasting method that can generate orecasts for the number of passengers arriving.
+
+## Data
+The historic data contains demand for a 3-week period (2005-03-01 to 2005-03-21), separated in 15-min intervals.
+```{r}
+library(readxl)
+file_n <- file.path(".", "DATA", "bicup2006.xls")
+bicup2006 <- read_excel(file_n, skip = 5,
+                        col_names = c("", "", "", "DATE", "TIME", "DEMAND"),
+                        col_types = c("blank", "blank", "blank", 
+                                      "date", "date", "numeric"))
+library(lubridate)
+bicup2006$DT <- as.POSIXct(paste(bicup2006$DATE, sprintf("%d:%d:%d", 
+                                                  hour(bicup2006$TIME),
+                                                  minute(bicup2006$TIME),
+                                                  second(bicup2006$TIME))))
+bicup2006 <- data.frame(DT = bicup2006$DT, DEMAND = bicup2006$DEMAND)
+```
+
+```{r}
+library(lubridate)
+n_days <- max(day(bicup2006$DT)) - min(day(bicup2006$DT)) + 1
+n_hours <- interval(min(bicup2006$DT) + days(n_days - 1), # From 06:30 to 22:00
+                    max(bicup2006$DT) + minutes(15)) / hours(1)
+n_quarters <- 4*n_hours # From (06:30 - 06:45) to (22:00 - 22:15)
+
+bicup2006_ts <- ts(bicup2006$DEMAND, start = c(1, 1), frequency = n_quarters)
+plot(bicup2006_ts, ylab = "Number of passengers", xlab = "Time",
+     main = "Transport Demand", xaxt = "n")
+axis(1, at = seq(1, n_days, 1), 
+     labels = format(as.Date(bicup2006$DT[n_quarters*seq(1, n_days, 1)])),
+     las = 3, cex.axis = .5)
+```
+
+## Goal
+Training period <- 1st 2 weeks
+Validation period <- last week
+
+```{r}
+startDate_total <- min(bicup2006$DT)
+endDate_total   <- max(bicup2006$DT)
+
+startDate_train <- min(bicup2006$DT)
+endDate_train   <- endDate_total - days(7)
+
+startDate_valid <- startDate_train + days(14)
+endDate_valid   <- endDate_total
+```
+
+
+```{r}
+nTrain <- 14*n_quarters
+nTotal <- length(bicup2006_ts)
+nValid <- nTotal - nTrain
+
+startTrain <- start(bicup2006_ts)
+endTrain <- startTrain + c(0, nTrain - 1)
+startValid <- endTrain + c(0, 1)
+endValid <- startValid + c(0, nValid - 1)
+
+bicup2006_train_ts <- window(bicup2006_ts, start = startTrain, end = endTrain)
+bicup2006_valid_ts <- window(bicup2006_ts, start = startValid, end = endValid)
+```
+
+Our goal is to create a model that generates reasonably good forecasts on any
+time/day of the week.
+
+Consider not only metrics as MAE, MAPE and RMSE, but also look at the actual and forecasted values overlaid on a time plot.
+
+## Assignment
+
+
+## Tips and Suggested Steps
+
+### 1 Exploratory analysis
+
+To identify the components of this ts. Is there a trend? Is there seasonality?
+If so, how many seasons are there? Are there any other visible patterns? Are the patterns global (the same throughout the series) or local?
+
+
+```{r}
+library(forecast)
+Acf(bicup2006_ts, lag.max = 630)
+```
+
+
+```{r}
+daily_bicup2006 <- ts(bicup2006$DEMAND, start = c(1, 1), 
+                      frequency = n_quarters)
+plot(daily_bicup2006,
+     main = "Daily periodicity")
+```
+
+```{r}
+plot(stl(daily_bicup2006, s.window = "periodic"),
+     main = "Daily periodicity")
+```
+
+
+```{r}
+weekly_bicup2006 <- ts(bicup2006$DEMAND, start = c(1, 1), 
+                       frequency = n_quarters*7)
+plot(weekly_bicup2006,
+     main = "Weekly periodicity")
+```
+
+```{r}
+plot(stl(weekly_bicup2006, s.window = "periodic"),
+     main = "Weekly periodicity")
+```
+
+
+There are **two sesonalities**: **weekly (period 7 days)** and **daily (24 hours before)**. 
+
+
+#### Predictability
+
+
+## Solutions
+
+### Naive forecasts
+
+### Double seasoned holt-winter's model
+
+```{r}
+train_msts <- msts(bicup2006[bicup2006$DT <= endDate_train, "DEMAND"],
+                   seasonal.periods = n_quarters * c(1, 7),
+                   start = startTrain)
+VALID_msts <- msts(bicup2006[bicup2006$DT > endDate_train, "DEMAND"],
+                   seasonal.periods = n_quarters * c(1, 7),
+                   start = startValid)
+
+# Fit a double seasoned holt-winter's model
+bicup2006_dshw_pred <- dshw(train_msts+1, h = nValid)
+# This is to correct a minor error in forecast package v7.1
+bicup2006_dshw_pred_mean <- msts(bicup2006_dshw_pred$mean-1,
+                                   seasonal.periods = n_quarters * c(1, 7),
+                                   start = startValid)
+accuracy(bicup2006_dshw_pred_mean, VALID_msts)
+```
+
+```{r}
+plot(train_msts, 
+     xlim = c(1, 4),
+     ylab = "Number of passengers", xlab = "Time",
+     main = "Transport Demand", xaxt = "n")
+axis(1, at = (seq(1, n_days+7, 7)-1)/7+1, 
+     labels = format(as.Date(bicup2006$DT[n_quarters*seq(1, n_days+7, 7)])),
+     las = 3, cex.axis = .75)
+lines(bicup2006_dshw_pred_mean, lwd = 2, col = "blue")
+```
+
+
+#### With 2nd-order level forecasting model on the residual series
+```{r}
+train_res_arima <- Arima(residuals(bicup2006_dshw_pred),
+                         order = c(1, 0, 0))
+summary(train_res_arima)
+train_res_arima_pred <- forecast(train_res_arima)
+```
+```{r}
+plot(residuals(bicup2006_dshw_pred), 
+     xlim = c(1, 4),
+     ylab = "Residuals", xlab = "Time", xaxt = "n")
+axis(1, at = (seq(1, n_days+7, 7)-1)/7+1, 
+     labels = format(as.Date(bicup2006$DT[n_quarters*seq(1, n_days+7, 7)])),
+     las = 3, cex.axis = .75)
+
+Acf(residuals(train_res_arima), main = "", lwd = 5, 
+    col = "lightblue")
+```
+
+```{r}
+# Now we have the model, let's make sonme forecasting
+# 1st level model forecasting is bicup2006_dshw_pred_mean
+plot(train_msts, 
+     xlim = c(1, 4), lwd = 2,
+     ylab = "Number of passengers", xlab = "Time",
+     main = "Transport Demand", xaxt = "n")
+axis(1, at = (seq(1, n_days+7, 7)-1)/7+1, 
+     labels = format(as.Date(bicup2006$DT[n_quarters*seq(1, n_days+7, 7)])),
+     las = 3, cex.axis = .75)
+lines(VALID_msts, lwd = 2, lty = 2, col = "black")
+
+# 2nd order level model, 1st level model + AR(1) model (forecasting = train_res_arima_pred)
+
+fitted_v <- fitted(bicup2006_dshw_pred) + fitted(train_res_arima_pred)
+fitted_m <- bicup2006_dshw_pred_mean + train_res_arima_pred$mean
+
+lines(fitted_v, lwd = 1, col = "blue")
+lines(fitted_m, lwd = 1, col = "blue", lty = 2)
+```
+
+```{r}
+# 1st order accuracy
+accuracy(fitted(bicup2006_dshw_pred), train_msts)
+accuracy(bicup2006_dshw_pred_mean, VALID_msts)
+```
+
+```{r}
+# 2nd order accuracy
+accuracy(fitted_v, train_msts)
+accuracy(fitted_m, VALID_msts)
+```
+
+### Neural networks
+
+Approach:
+
+* Daily seasonality: lag-(n_quarters)
+* Weekly seasonality: 7 dummy variables
+
+```{r}
+bicup2006$day_of_week <- wday(bicup2006$DT, label = TRUE)
+
+day_of_week.dummies <- model.matrix(~ 0 + day_of_week, 
+                                    data = bicup2006)
+colnames(day_of_week.dummies) <- gsub("day_of_week", "",
+                                      colnames(day_of_week.dummies))
+
+bicup2006$lag_n_quarters <- c(rep(NA, n_quarters),
+                              bicup2006$DEMAND[1:(nrow(bicup2006)-n_quarters)])
+bicup2006 <- cbind(bicup2006, day_of_week.dummies[,-1])
+```
+
+
+
+
+#### nnetar()
+```{r}
+# External regressors names
+xreg_features <- c(names(bicup2006)[5:10])
+xreg_train <- bicup2006[bicup2006$DT <= endDate_train, xreg_features]
+xreg_valid <- bicup2006[bicup2006$DT > endDate_train, xreg_features]
+
+# Weekly seasonality
+train_ts <- ts(bicup2006[bicup2006$DT <= endDate_train, "DEMAND"],
+                   start = startTrain, frequency = 7*n_quarters)
+valid_ts <- ts(bicup2006[bicup2006$DT > endDate_train, "DEMAND"],
+               start = startValid, frequency = 7*n_quarters)
+
+# Daily seasonality: n_quarters non seasonal lags 
+# Weekly seasonality: 6 dummy variables and 1 seasonal (weekly) lag
+set.seed(201)
+bicup2006.nnetar <- nnetar(train_ts, repeats = 20, 
+                           p = n_quarters, P = 1, size = 4,
+                           xreg = xreg_train)
+
+bicup2006.nnetar.pred <- forecast(bicup2006.nnetar, 
+                                  h = nValid,
+                                  xreg = xreg_valid)
+accuracy(bicup2006.nnetar.pred, valid_ts)
+```
+
+```{r}
+plot(bicup2006.nnetar.pred)
+lines(train_ts, lty = 2, col = "red")
+lines(valid_ts, lty = 2, col = "red")
+```
+
+
+
+#### elman
+
+
+## Others
+
+### TMA and Simple Exponential Smoothing
+MA and SES can be used to forecast series with just a level and noise.
+If the series shows, in addition, a trend and/or seasonality, we can first 
+remove those components.
+
+MA and SES are not valid with trend or seasonality. First, we should de-trend and deseasonalize using Regression models, Advanced exponential smoothing or differencing
+
+### Advanced Exponential Smoothing
+AES can capture trend and seasonality.
+```{r}
+# Weekly seasonality
+train_ts <- ts(bicup2006[bicup2006$DT <= endDate_train, "DEMAND"],
+                   start = startTrain, frequency = 7*n_quarters)
+valid_ts <- ts(bicup2006[bicup2006$DT > endDate_train, "DEMAND"],
+               start = startValid, frequency = 7*n_quarters)
+
+bicup2006_ets <- ets(y = train_ts)
+```
+
+```{r}
+bicup2006_ets_pred <- forecast(bicup2006_ets, h = nValid, level = 0)
+
+plot(bicup2006_ets_pred,
+     xlab = "Time", ylab = "Number of passengers", main = "Transport Demand",
+     flty = 2)
+
+lines(bicup2006_ets_pred$fitted, lwd = 2, col = "blue")
+lines(valid_ts)
+
+accuracy(bicup2006_ets_pred, valid_ts)
+
+```
+
+### REGRESSION-BASED MODELS - tslm()
+```{r}
+# Weekly seasonality
+train_ts <- ts(bicup2006[bicup2006$DT <= endDate_train, "DEMAND"],
+                   start = startTrain, frequency = 7*n_quarters)
+valid_ts <- ts(bicup2006[bicup2006$DT > endDate_train, "DEMAND"],
+               start = startValid, frequency = 7*n_quarters)
+
+bicup2006_lm <- tslm(train_ts ~ trend + season)
+```
+
+```{r}
+bicup2006_lm_pred <- forecast(bicup2006_lm, h = nValid, level = 0)
+
+plot(bicup2006_lm_pred,
+     xlab = "Time", ylab = "Number of passengers", main = "Transport Demand",
+     flty = 2)
+
+lines(bicup2006_lm_pred$fitted, lwd = 2, col = "blue")
+lines(valid_ts)
+
+accuracy(bicup2006_lm_pred, valid_ts)
+
+```
+
+
+### ARIMA models
+
+```{r}
+bicup2006_arima <- auto.arima(train_ts, xreg = xreg_train)
+
+# bicup2006_arima <- Arima(train_ts, 
+#                          order = c(4, 1, 2), 
+#                          seasonal = list(order = c(2,1,1), 
+#                                          period = n_quarters), 
+#                          xreg = xreg_train)
+```
+
+```{r}
+bicup2006_arima_pred <- forecast(bicup2006_arima, h = nValid, level = 0,
+                                 xreg = xreg_valid)
+
+plot(bicup2006_arima_pred,
+     xlab = "Time", ylab = "Number of passengers", main = "Transport Demand",
+     flty = 2)
+
+lines(bicup2006_arima_pred$fitted, lwd = 2, col = "blue")
+lines(valid_ts)
+
+accuracy(bicup2006_arima_pred, valid_ts)
+
+```
+
+### 1st and 2nd order models
+
