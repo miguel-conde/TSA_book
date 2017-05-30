@@ -1,0 +1,158 @@
+---
+title: "timekit package"
+author: "Miguel Conde"
+date: "30 de mayo de 2017"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 4
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE,
+                      fig.align = "center")
+```
+
+https://business-science.github.io/timekit/index.html
+
+
+The package contains the following functions:
+
+* **Get an index**: `tk_index` returns the time series index of time series objects, models. The argument `timekit_idx` can be used to return a special timekit “index” attribute for regularized ts objects that returns a non-regularized date / date-time index if present.
+
+* **Get critical timeseries information**: `tk_get_timeseries_signature` and `tk_get_timeseries_summary` takes an index and provides a time series decomposition and key summary attributes of the index, respectively. The `tk_augment_timeseries_signature` expedites adding the time series decomposition to the time series object.
+
+* **Make a future timeseries**: `tk_make_future_timeseries` models a future time series after an existing time series index.
+
+* **Coercion functions**: `tk_tbl`, `tk_ts`, `tk_xts`, `tk_zoo`, and `tk_zooreg` coerce time-based tibbles tbl to and from each of the main time-series data types `xts`, `zoo`, `zooreg`, `ts`, maintaining the time-based index.
+
+
+# Time Series Coercion
+
+```{r}
+require(timekit)
+require(tidyquant)
+
+ten_year_treasury_rate_tbl <- tq_get("DGS10", 
+                                     get  = "economic.data", 
+                                     from = "1997-01-01", 
+                                     to   = "2016-12-31") %>%
+  rename(pct = price) %>%
+  mutate(pct = pct / 100)
+
+ten_year_treasury_rate_tbl
+```
+
+```{r}
+class(ten_year_treasury_rate_tbl)
+```
+
+```{r}
+str(ten_year_treasury_rate_tbl)
+```
+
+```{r}
+# Change to a quarterly periodicity
+ten_year_treasury_rate_tbl <- ten_year_treasury_rate_tbl %>%
+  tq_transmute(pct, mutate_fun = to.period, period = "quarters")
+
+ten_year_treasury_rate_tbl
+```
+
+## Coercion issues with `ts()`
+The `ts` data structure is the most difficult to coerce back and forth because by default it does not contain a time-based index. Rather it uses a regularized index computed using the `start` and `frequency` arguments. Coercion to `ts` is done using the `ts()` function from the `stats` library, which results in various problems.
+
+```{r}
+# date column gets coerced to numeric
+ts(ten_year_treasury_rate_tbl, start = 1997, freq = 4) %>%
+    head()
+```
+The correct method is to call the specific column desired. However, this presents a new issue. The date index is lost, and a different “regularized” index is built using the start and frequency attributes.
+
+```{r}
+ten_year_treasury_rate_ts_stats <- ts(ten_year_treasury_rate_tbl[,"pct"], 
+                                      start = 1997, 
+                                      freq  = 4)
+ten_year_treasury_rate_ts_stats
+```
+
+```{r}
+# No date index attribute
+str(ten_year_treasury_rate_ts_stats)
+```
+
+We can get the index using the `index()` function from the `zoo` package. The index retained is a regular sequence of numeric values. In many cases, the regularized values cannot be coerced back to the original time-base because the date and date time data contains significantly more information (i.e. year-month-day, hour-minute-second, and timezone attributes) and the data may not be on a regularized interval (frequency).
+```{r}
+# Regularized numeric sequence
+index(ten_year_treasury_rate_ts_stats)
+```
+
+**Solution:**
+
+```{r}
+# date automatically dropped and user is warned
+ten_year_treasury_rate_ts_timekit <- tk_ts(ten_year_treasury_rate_tbl, 
+                                         start = 1997, 
+                                         freq  = 4)
+```
+
+```{r}
+ten_year_treasury_rate_ts_timekit
+```
+
+```{r}
+# More attributes including time index, time class, time zone
+str(ten_year_treasury_rate_ts_timekit)
+```
+
+**`tk_index()`** and **`tk_tbl()`**
+```{r}
+# Can now retrieve the original date index
+timekit_index <- tk_index(ten_year_treasury_rate_ts_timekit, timekit_idx = TRUE)
+head(timekit_index)
+```
+```{r}
+class(timekit_index)
+```
+
+Note the difference:
+```{r}
+tk_index(ten_year_treasury_rate_ts_timekit, timekit_idx = FALSE)
+```
+```{r}
+# Coercion back to tibble using the default index (regularized)
+ten_year_treasury_rate_ts_timekit %>%
+    tk_tbl(index_rename = "date", timekit_idx = FALSE)
+```
+Compare to this (the original index now):
+```{r}
+# Coercion back to tibble now using the timekit index (date / date-time)
+ten_year_treasury_rate_tbl_timekit <- ten_year_treasury_rate_ts_timekit %>%
+    tk_tbl(index_rename = "date", timekit_idx = TRUE)
+ten_year_treasury_rate_tbl_timekit
+```
+
+```{r}
+# Comparing the coerced tibble with the original tibble
+identical(ten_year_treasury_rate_tbl_timekit, ten_year_treasury_rate_tbl)
+```
+
+## Coercion methods
+
+## Additional Concepts
+
+### Testing if an object has a timekit index
+
+### Coercing ts to xts and zoo
+
+### Working with yearmon and yearqtr index
+
+### Getting the index of other time-based objects (e.g. models)
+
+
+# Working with the Time Series Index
+
+# Making a Future Time Series Index
+
+# Forecasting Using a Time Series Signature

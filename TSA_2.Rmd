@@ -1,0 +1,70 @@
+---
+title: "Time Series Regression and Exploratory Data Analysis"
+author: "Miguel Conde"
+date: "1 de mayo de 2017"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 4
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE,
+                      fig.align = "center")
+```
+
+```{r}
+if(!require(astsa)) {
+  install.packages("astsa")
+  library(astsa)
+}
+```
+
+## Classical Regression in the Time Series Context
+
+```{r}
+summary(fit <- lm(gtemp~time(gtemp))) # regress gtemp on time - view results
+plot(gtemp, type="o", ylab="Global Temperature Deviation")
+abline(fit) # add the fitted regression line to the plot
+```
+
+It is apparent that the estimated trend line obtained via simple linear regression does not quite capture the trend of the data and better models will be needed.
+
+
+The minimized Sum of Squares Error is:
+
+```{r}
+SSE <- sum(residuals(fit)^2)
+SSE
+```
+
+An unbiased estimator for the noise variance $\sigma_w^2$ is:
+
+$$
+s^2_w = MSE = \frac{SSE}{n-(q+1)}
+$$
+
+```{r}
+n <- length(gtemp)
+q <- length(coef(fit)) - 1
+df <- (n - (q + 1))
+
+MSE1 <- SSE / df
+MSE1
+```
+
+Which is the same as the Mean Squared Error MSE:
+```{r}
+MSE2 <- mean(residuals(fit)^2)
+MSE2
+```
+
+```{r}
+library(Metrics)
+MSE3 <- mse(gtemp, fitted(fit))
+MSE3
+```
+
+
+
