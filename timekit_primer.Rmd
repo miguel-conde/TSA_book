@@ -153,6 +153,124 @@ identical(ten_year_treasury_rate_tbl_timekit, ten_year_treasury_rate_tbl)
 
 # Working with the Time Series Index
 
+The **time series index**, which consists of a collection of time-based values that define when each observation occurred, is the most important part of a time series object. 
+
+The index gives the user a lot of information in a simple timestamp. Consider the datetime “2016-01-01 00:00:00”: 
+
+* From this timestamp, we can decompose the datetime to get the **signature**, which consists of the year, quarter, month, day, day of year, day of month, hour, minute, and second of the occurrence of a single observation. 
+
+* Further, the difference between two or more observations is the **frequency** from which we can obtain even more information such as the periodicity of the data and whether or not these observations are on a regular interval. This information is critical as it provides the basis for performance over time in finance, decay rates in biology, growth rates in economics, and so on.
+
+```{r}
+FB_tbl <- FANG %>% filter(symbol == "FB")
+FB_tbl
+```
+
+```{r}
+FB_vol_date <- FB_tbl %>% select(date, volume)
+FB_vol_date
+```
+
+```{r}
+FB_vol_yearqtr <- FB_vol_date %>%
+    mutate(date = as.yearqtr(date)) %>%
+    group_by(date) %>%
+    summarize(volume = sum(volume))
+FB_vol_yearqtr
+```
+
+## Extract an index
+
+**`tk_index`**
+The function tk_index() extracts the index from any time series object including data frame (or tbl), xts, zoo, etc. 
+
+```{r}
+# idx_date
+idx_date <- tk_index(FB_vol_date)
+str(idx_date)
+```
+
+```{r}
+# idx_yearqtr
+idx_yearqtr <- tk_index(FB_vol_yearqtr)
+paste0("class: ", class(idx_yearqtr), "\n",
+       "n.obs: ", length(idx_yearqtr), "\n",
+       "head:  ", stringr::str_c(head(idx_yearqtr), collapse = ", ")) %>%
+    cat()
+```
+
+
+## Analyze the index
+
+### tk_get_timeseries_signature and tk_augment_timeseries_signature
+
+The index can be decomposed into a *signature*. The time series signature is a unique set of properties of the time series values that describe the time series. The function `tk_get_timeseries_signature()` can be used to convert the index to a tibble containing the relevant values (columns):
+```{r}
+# idx_date signature
+tk_get_timeseries_signature(idx_date)
+```
+We can also get the signature of other time-based objects. The `tk_get_timeseries_signature()` function works with date, datetime, yearmon, and yearqtr vectors.
+
+```{r}
+# idx_yearqtr signature
+tk_get_timeseries_signature(idx_yearqtr)
+```
+It’s usually important to keep the index signature with the values (e.g. volume in our example). We can use an expedited approach with `tk_augment_timeseries_signature()`, which adds the signature to the end of the time series object.
+```{r}
+# Augmenting a data frame
+FB_vol_date_signature <- tk_augment_timeseries_signature(FB_vol_date)
+FB_vol_date_signature
+```
+Analyzing the time series is now easier with the decomposed measures. For example, we can create a month plot very easily in `ggplot2`.
+
+```{r}
+# Example Benefit 1: Making a month plot
+FB_vol_monthly <- FB_vol_date_signature %>%
+    group_by(year, month.lbl) %>%
+    summarize(volume = sum(volume)) 
+
+FB_vol_monthly %>%
+    ggplot(aes(x = month.lbl, y = volume, fill = factor(year))) +
+    geom_bar(stat = "identity") +
+    labs(title = "Month Plot of FB Volume", x ="", fill = "Year",
+         subtitle = "Analyzing time-based metrics is easy with time series signature") +
+    theme_tq() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    scale_fill_tq() +
+    scale_y_continuous(labels = scales::comma)
+```
+
+Modeling is also much easier. As an example, we can use linear regression model using the lm() function with the month and year as a predictor of volume.
+
+```{r}
+# Example Benefit 2: Modeling is easier
+fit <- lm(volume ~ year + month.lbl, data = FB_vol_monthly)
+summary(fit)
+```
+### tk_get_timeseries_summary
+```{r}
+# idx_date: First six columns, general summary
+tk_get_timeseries_summary(idx_date)[,1:6]
+```
+
+
+```{r}
+# idx_date: First six columns, differences summary
+tk_get_timeseries_summary(idx_date)[,7:12]
+```
+
+```{r}
+# idx_yearqtr: First six columns, general summary
+tk_get_timeseries_summary(idx_yearqtr)[,1:6]
+```
+
+```{r}
+# idx_yearqtr: Last six columns, difference summary
+tk_get_timeseries_summary(idx_yearqtr)[,7:12]
+```
+
+
+
 # Making a Future Time Series Index
 
 # Forecasting Using a Time Series Signature
