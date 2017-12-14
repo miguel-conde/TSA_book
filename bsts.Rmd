@@ -1,0 +1,443 @@
+---
+title: "Bayesian structural time series"
+author: "Miguel Conde"
+date: "14 de diciembre de 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE,
+                      fig.align = "center")
+```
+
+https://rpubs.com/osazuwa/bsts
+
+
+
+The bsts package contains the initial.claims dataset, which contains a weekly time series of US initial claims for unemployment from Federal Reserve Economic Data.
+```{r}
+library(tidyverse, quietly = TRUE)
+library(bsts, quietly = TRUE)    
+data(iclaims)
+.data <- initial.claims
+claims <- .data$iclaimsNSA
+plot(claims, ylab = "")
+```
+
+```{r}
+str(.data)
+```
+
+## Building a model by components
+
+Start with an empty list of model components.
+
+```{r}
+(model_components <- list())
+```
+
+Add a Trend Component
+
+```{r}
+model_components <- AddLocalLinearTrend(model_components, 
+                                        y = claims)
+summary(model_components)
+```
+
+Add a Seasonal Component
+
+A week about 52 weeks. I also add a yearly commponent.
+
+
+```{r}
+model_components <- AddSeasonal(model_components, y = claims, 
+                                  nseasons  = 52)
+summary(model_components)
+```
+
+Fitting a model
+```{r}
+fit <- bsts(claims, model_components, niter = 2000)
+```
+
+Since this is a Bayesian model, the trend and seasonal component parameters are MCMC samples from a posterior. The following visualizes the contributions of each component to the model fit, based on posterior sample means:
+
+```{r}
+burnin <- 500 # Throw away first 500 
+tibble(
+  date = as.Date(time(claims)),
+  trend = colMeans(fit$state.contributions[-(1:burnin),"trend",]),
+  seasonality = colMeans(fit$state.contributions[-(1:burnin),"seasonal.52.1",])) %>%
+  gather("component", "value", trend, seasonality) %>%
+  ggplot(aes(x = date, y = value)) + 
+    geom_line() + theme_bw() + 
+    theme(legend.title = element_blank()) + ylab("") + xlab("") +
+    facet_grid(component ~ ., scales="free") + guides(colour=FALSE) +
+    theme(axis.text.x=element_text(angle = -90, hjust = 0))
+```
+
+### Prediction with a 90% credible interval
+The generic predict method works on the bsts fit. Predictions into the future has credible intervals. Note how quickly they expand as time progresses.
+
+```{r}
+pred <- predict(fit, horizon = 100, burn = burnin, quantiles = c(.05, .95))
+plot(pred)
+```
+
+### Check Errors
+I can plot to see where the true model deviates the most from my fitted model.
+
+
+```{r}
+errors <- bsts.prediction.errors(fit, burn = 1000)
+PlotDynamicDistribution(errors$in.sample, attr(errors, "timestamps"))
+```
+
+## Adding Regressors to the Model
+The dataset also includes time series that correlate strongly with initial claims. bsts will combine the trend and seasonal components with a regression on these other time series.
+
+```{r}
+fit2 <- bsts(iclaimsNSA ~ ., state.specification = model_components, 
+              data = initial.claims, niter = 1000)
+```
+We can obtain parameter estimates by again taking the sample mean of the sampled beta values.
+
+```{r}
+colMeans(fit2$coefficients)
+```
+
+```{r}
+summary(fit2)
+```
+
+[Scott, Steven, and Hal Varian. 2014. “Predicting the Present with Bayesian Structural Time Series” 5. Inderscience Publishers Ltd: 4–23](http://people.ischool.berkeley.edu/~hal/Papers/2013/pred-present-with-bsts.pdf).
+
+## Another example
+
+http://multithreaded.stitchfix.com/blog/2016/04/21/forget-arima/
+
+### An ARIMA Model
+
+
+```{r}
+library(lubridate)
+library(bsts)
+library(dplyr)
+library(ggplot2)
+library(forecast)
+
+
+### Load the data
+data("AirPassengers")
+Y <- window(AirPassengers, start=c(1949, 1), end=c(1959,12))
+
+### Fit the ARIMA model
+#   The year of 1960 was used as the holdout period for validation
+#    Using a log transformation to model the growth rate
+arima <- arima(log10(Y), 
+               # First order differencing (d = 1) and a moving average term
+               # (q = 1)
+               order = c(0, 1, 1), 
+               # Seasonal differencing and a seasonal MA term
+               seasonal = list(order = c(0,1,1), period = 12) 
+               )
+
+### Actual versus predicted
+d1 <- data.frame(c(10^as.numeric(fitted(arima)), # fitted and predicted
+                   10^as.numeric(predict(arima, n.ahead = 12)$pred)),
+                   as.numeric(AirPassengers), #actual values
+                   as.Date(time(AirPassengers)))
+names(d1) <- c("Fitted", "Actual", "Date")
+
+
+### MAPE (mean absolute percentage error)
+MAPE <- filter(d1, year(Date)>1959) %>% summarise(MAPE=mean(abs(Actual-Fitted)/Actual))
+
+### Plot actual versus predicted
+ggplot(data=d1, aes(x=Date)) +
+  geom_line(aes(y=Actual, colour = "Actual"), size=1.2) +
+  geom_line(aes(y=Fitted, colour = "Fitted"), size=1.2, linetype=2) +
+  theme_bw() + theme(legend.title = element_blank()) + 
+  ylab("") + xlab("") +
+  geom_vline(xintercept=as.numeric(as.Date("1959-12-01")), linetype=2) +
+  ggtitle(paste0("ARIMA -- Holdout MAPE = ", round(100*MAPE,2), "%")) + 
+  theme(axis.text.x=element_text(angle = -90, hjust = 0))
+```
+
+This model predicts the holdout period quite well as measured by the MAPE (mean absolute percentage error). However, the model does not tell us much about the time series itself. In other words, we cannot visualize the “story” of the model. All we know is that we can fit the data well using a combination of moving averages and lagged terms.
+
+### A Bayesian Structural Time Series Model
+500 MCMC draws
+Use 1960 as the holdout period
+
+Forecast created by averaging across the MCMC draws
+Credible interval generated from the distribution of the MCMC draws
+Discarding the first MCMC iterations (burn-in)
+Using a log transformation to make the model multiplicative
+
+```{r}
+library(lubridate)
+library(bsts)
+library(dplyr)
+library(ggplot2)
+
+### Load the data
+data("AirPassengers")
+Y <- window(AirPassengers, start=c(1949, 1), end=c(1959,12))
+y <- log10(Y)
+
+
+### Run the bsts model
+ss <- AddLocalLinearTrend(list(), y)
+ss <- AddSeasonal(ss, y, nseasons = 12)
+bsts.model <- bsts(y, state.specification = ss, niter = 500, 
+                   ping=0, seed=2016)
+
+### Get a suggested number of burn-ins
+burn <- SuggestBurn(0.1, bsts.model)
+
+### Predict
+p <- predict.bsts(bsts.model, horizon = 12, burn = burn, 
+                  quantiles = c(.025, .975))
+
+### Actual versus predicted
+d2 <- data.frame(
+    # fitted values and predictions
+    c(10^as.numeric(-colMeans(bsts.model$one.step.prediction.errors[-(1:burn),])+y),  
+    10^as.numeric(p$mean)),
+    # actual data and dates 
+    as.numeric(AirPassengers),
+    as.Date(time(AirPassengers)))
+
+names(d2) <- c("Fitted", "Actual", "Date")
+
+### MAPE (mean absolute percentage error)
+MAPE <- filter(d2, year(Date)>1959) %>% summarise(MAPE=mean(abs(Actual-Fitted)/Actual))
+
+### 95% forecast credible interval
+posterior.interval <- cbind.data.frame(
+  10^as.numeric(p$interval[1,]),
+  10^as.numeric(p$interval[2,]), 
+  subset(d2, year(Date)>1959)$Date)
+names(posterior.interval) <- c("LL", "UL", "Date")
+
+### Join intervals to the forecast
+d3 <- left_join(d2, posterior.interval, by="Date")
+
+### Plot actual versus predicted with credible intervals for the holdout period
+ggplot(data=d3, aes(x=Date)) +
+  geom_line(aes(y = Actual, colour = "Actual"), size = 1.2) +
+  geom_line(aes(y = Fitted, colour = "Fitted"), size = 1.2, linetype = 2) +
+  theme_bw() + theme(legend.title = element_blank()) + ylab("") + xlab("") +
+  geom_vline(xintercept = as.numeric(as.Date("1959-12-01")), linetype = 2) + 
+  geom_ribbon(aes(ymin = LL, ymax = UL), fill = "grey", alpha = 0.5) +
+  ggtitle(paste0("BSTS -- Holdout MAPE = ", round(100*MAPE, 2), "%")) +
+  theme(axis.text.x = element_text(angle = -90, hjust = 0))
+```
+
+
+* When building Bayesian models we get a distribution and not a single answer. Thus, the bsts package returns results (e.g., forecasts and components) as matrices or arrays where the first dimension holds the MCMC iterations.
+* Most of the plots in this post show point estimates from averaging (using the colMeans function). But it’s very easy to get distributions from the MCMC draws, and this is recommended in real life to better quantify uncertainty.
+* For visualization, I went with ggplot for this example in order to demonstrate how to retrieve the output for custom plotting. Alternatively, we can simply use the plot.bsts function that comes with the bsts package.
+
+Note that the predict.bsts function automatically supplies the upper and lower limits for a credible interval (95% in our case). We can also access the distribution for all MCMC draws by grabbing the distribution matrix (instead of interval). Each row in this matrix is one MCMC draw. Here’s an example of how to calculate percentiles from the posterior distribution:
+
+```{r}
+credible.interval <- cbind.data.frame(
+  10^as.numeric(apply(p$distribution, 2,function(f){quantile(f,0.75)})),
+  10^as.numeric(apply(p$distribution, 2,function(f){median(f)})),
+  10^as.numeric(apply(p$distribution, 2,function(f){quantile(f,0.25)})),
+  subset(d3, year(Date)>1959)$Date)
+names(credible.interval) <- c("p75", "Median", "p25", "Date")
+```
+
+
+Although the holdout MAPE (mean absolute percentage error) is larger than the ARIMA model for this specific dataset (and default settings), the bsts model does a great job of capturing the growth and seasonality of the air passengers time series. Moreover, one of the big advantages of the Bayesian structural model is that we can visualize the underlying components. In this example, we’re using ggplot to plot the average of the MCMC draws for the trend and the seasonal components:
+
+```{r}
+library(lubridate)
+library(bsts)
+library(ggplot2)
+library(reshape2)
+
+### Set up the model
+data("AirPassengers")
+Y <- window(AirPassengers, start=c(1949, 1), end=c(1959,12))
+y <- log10(Y)
+ss <- AddLocalLinearTrend(list(), y)
+ss <- AddSeasonal(ss, y, nseasons = 12)
+bsts.model <- bsts(y, state.specification = ss, niter = 500, ping=0, seed=2016)
+
+### Get a suggested number of burn-ins
+burn <- SuggestBurn(0.1, bsts.model)
+
+### Extract the components
+components <- cbind.data.frame(
+  colMeans(bsts.model$state.contributions[-(1:burn),"trend",]),                               
+  colMeans(bsts.model$state.contributions[-(1:burn),"seasonal.12.1",]),
+  as.Date(time(Y)))  
+names(components) <- c("Trend", "Seasonality", "Date")
+components <- melt(components, id="Date")
+names(components) <- c("Date", "Component", "Value")
+
+### Plot
+ggplot(data=components, aes(x=Date, y=Value)) + geom_line() + 
+  theme_bw() + theme(legend.title = element_blank()) + ylab("") + xlab("") + 
+  facet_grid(Component ~ ., scales="free") + guides(colour=FALSE) + 
+  theme(axis.text.x=element_text(angle = -90, hjust = 0))
+```
+
+### Bayesian Variable Selection
+
+Another advantage of Bayesian structural models is the ability to use spike-and-slab priors. This provides a powerful way of reducing a large set of correlated variables into a parsimonious model, while also imposing prior beliefs on the model. Furthermore, by using priors on the regressor coefficients, the model incorporates uncertainties of the coefficient estimates when producing the credible interval for the forecasts.
+
+As the name suggests, spike and slab priors consist of two parts: the spike part and the slab part. The spike part governs the probability of a given variable being chosen for the model (i.e., having a non-zero coefficient). The slab part shrinks the non-zero coefficients toward prior expectations (often zero). 
+
+Here’s an example of fitting a model to the initial claims data, which is a weekly time series of US initial claims for unemployment (the first column is the dependent variable, which contains the initial claims numbers from FRED). The model has a trend component, a seasonal component, and a regression component.
+
+For model selection, we are essentially using the “spike” part of the algorithm to select variables and the “slab” part to shrink the coefficients towards zero (akin to ridge regression).
+
+```{r}
+library(lubridate)
+library(bsts)
+library(ggplot2)
+library(reshape2)
+
+### Fit the model with regressors
+data(iclaims)
+ss <- AddLocalLinearTrend(list(), initial.claims$iclaimsNSA)
+ss <- AddSeasonal(ss, initial.claims$iclaimsNSA, nseasons = 52)
+bsts.reg <- bsts(iclaimsNSA ~ ., state.specification = ss, data =
+                initial.claims, niter = 500, ping=0, seed=2016)
+
+### Get the number of burn-ins to discard
+burn <- SuggestBurn(0.1, bsts.reg)
+
+### Helper function to get the positive mean of a vector
+PositiveMean <- function(b) {
+  b <- b[abs(b) > 0]
+  if (length(b) > 0) 
+    return(mean(b))
+  return(0)
+}
+
+### Get the average coefficients when variables were selected (non-zero slopes)
+coeff <- data.frame(melt(apply(bsts.reg$coefficients[-(1:burn),], 2,
+                               PositiveMean)))
+coeff$Variable <- as.character(row.names(coeff))
+ggplot(data=coeff, aes(x=Variable, y=value)) + 
+  geom_bar(stat="identity", position="identity") + 
+  theme(axis.text.x=element_text(angle = -90, hjust = 0)) +
+  xlab("") + ylab("") + ggtitle("Average coefficients")
+```
+
+```{r}
+### Inclusion probabilities -- i.e., how often were the variables selected 
+inclusionprobs <- melt(colMeans(bsts.reg$coefficients[-(1:burn),] != 0))
+inclusionprobs$Variable <- as.character(row.names(inclusionprobs))
+ggplot(data=inclusionprobs, aes(x=Variable, y=value)) + 
+  geom_bar(stat="identity", position="identity") + 
+  theme(axis.text.x=element_text(angle = -90, hjust = 0)) + 
+  xlab("") + ylab("") + ggtitle("Inclusion probabilities")
+```
+
+The output shows that the model is dominated by two variables: unemployment.office and idaho.unemployment. These variables have the largest average coefficients and were selected in 100% of models. Note that if we want to inspect the distributions of the coefficients, we can can simply calculate quantiles instead of the mean inside the helper function above:
+
+```{r}
+P75 <- function(b) {
+  b <- b[abs(b) > 0]
+  if (length(b) > 0) 
+    return(quantile(b, 0.75))
+  return(0)
+}
+
+p75 <- data.frame(melt(apply(bsts.reg$coefficients[-(1:burn),], 2, P75)))
+```
+
+And we can easily visualize the overall contribution of these variables to the model:
+
+```{r}
+library(lubridate)
+library(bsts)
+library(ggplot2)
+library(reshape2)
+
+### Fit the model with regressors
+data(iclaims)
+ss <- AddLocalLinearTrend(list(), initial.claims$iclaimsNSA)
+ss <- AddSeasonal(ss, initial.claims$iclaimsNSA, nseasons = 52)
+bsts.reg <- bsts(iclaimsNSA ~ ., state.specification = ss, 
+                 data = initial.claims, niter = 500, ping=0, seed=2016)
+
+### Get the number of burn-ins to discard
+burn <- SuggestBurn(0.1, bsts.reg)
+
+### Get the components
+components.withreg <- cbind.data.frame(
+  colMeans(bsts.reg$state.contributions[-(1:burn),"trend",]),
+  colMeans(bsts.reg$state.contributions[-(1:burn),"seasonal.52.1",]),
+  colMeans(bsts.reg$state.contributions[-(1:burn),"regression",]),
+  as.Date(time(initial.claims)))  
+names(components.withreg) <- c("Trend", "Seasonality", "Regression", "Date")
+components.withreg <- melt(components.withreg, id.vars="Date")
+names(components.withreg) <- c("Date", "Component", "Value")
+
+ggplot(data=components.withreg, aes(x=Date, y=Value)) + geom_line() + 
+  theme_bw() + theme(legend.title = element_blank()) + ylab("") + xlab("") + 
+  facet_grid(Component ~ ., scales="free") + guides(colour=FALSE) + 
+  theme(axis.text.x=element_text(angle = -90, hjust = 0))
+```
+
+### Including Prior Expectations in the Model
+In the example above, we used the spike-and-slab prior as a way to select variables and promote sparsity. However, we can also use this framework to impose prior beliefs on the model. These prior beliefs could come from an outside study or a previous version of the model. This is a common use-case in time series regression; we cannot always rely on the data at hand to tell you how known business drivers affect the outcome.
+
+In the bsts package, this is done by passing a prior object as created by the SpikeSlabPrior function. In this example we are specifying a prior of 0.6 on the variable called unemployment.office and forcing this variable to be selected by setting its prior spike parameter to 1. We’re giving our priors a weight of 200 (measured in observation count), which is fairly large given that the dataset has 456 records. Hence we should expect the posterior to be very close to 0.6.
+
+```{r}
+library(lubridate)
+library(bsts)
+library(ggplot2)
+library(reshape2)
+
+data(iclaims)
+
+prior.spikes <- c(0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,0.1,1,0.1)
+prior.mean <- c(0,0,0,0,0,0,0,0,0,0.6,0)
+
+### Helper function to get the positive mean of a vector
+PositiveMean <- function(b) {
+  b <- b[abs(b) > 0]
+  if (length(b) > 0) 
+    return(mean(b))
+  return(0)
+}
+
+### Set up the priors
+prior <- SpikeSlabPrior(x=model.matrix(iclaimsNSA ~ ., data=initial.claims), 
+                        y=initial.claims$iclaimsNSA, 
+                        prior.information.weight = 200,
+                        prior.inclusion.probabilities = prior.spikes,
+                        optional.coefficient.estimate = prior.mean)
+                        
+### Run the bsts model with the specified priors
+data(iclaims)
+ss <- AddLocalLinearTrend(list(), initial.claims$iclaimsNSA)
+ss <- AddSeasonal(ss, initial.claims$iclaimsNSA, nseasons = 52)
+bsts.reg.priors <- bsts(iclaimsNSA ~ ., state.specification = ss, 
+                        data = initial.claims, 
+                        niter = 500, 
+                        prior=prior, 
+                        ping=0, seed=2016)
+
+
+### Get the average coefficients when variables were selected (non-zero slopes)
+coeff <- data.frame(melt(apply(bsts.reg.priors$coefficients[-(1:burn),], 2, PositiveMean)))
+coeff$Variable <- as.character(row.names(coeff))
+ggplot(data=coeff, aes(x=Variable, y=value)) + 
+  geom_bar(stat="identity", position="identity") + 
+  theme(axis.text.x=element_text(angle = -90, hjust = 0)) + 
+  xlab("") + ylab("")
+```
+
+As we can see, the posterior for unemployment.office is being forced towards 0.6 due to the strong prior belief that we imposed on the coefficient.
+

@@ -491,6 +491,37 @@ accuracy(outValid, EBSP_FOB_rsnns.pred)
 
 lines(EBSP_FOB_rsnns.pred, lty = 2, col = "red")
 
+## Probatina keras
+# https://www.freelancermap.com/freelancer-tips/11865-trend-prediction-with-lstm-rnns-using-keras-tensorflow-in-3-steps
+library(keras)
+model <- keras_model_sequential() 
+model %>% 
+  layer_embedding(input_dim = 4, output_dim = 8) %>%
+  layer_lstm(units = 4) %>%
+  # layer_lstm(units = 4, input_shape = c(4, 4)) %>%
+  layer_dense(units = 1) 
+
+summary(model)
+
+model %>% compile(
+  loss = 'mean_squared_error',
+  optimizer = optimizer_adam(),
+  metrics = c('accuracy')
+)
+
+history <- model %>% fit(
+  as.matrix(inTrain), as.matrix(outTrain), 
+  epochs = 20, batch_size = 128, 
+  validation_split = 0.2
+)
+
+plot(history)
+
+loss_and_metrics <- model %>% evaluate(as.matrix(inValid), as.matrix(outValid), 
+                                       batch_size = 128)
+
+valPredictions <- model %>% predict(as.matrix(inValid), batch_size = 128)
+
 ## Probatina 2
 set.seed(42)
 library(quantmod)
