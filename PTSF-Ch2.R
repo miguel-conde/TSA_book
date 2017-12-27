@@ -1,6 +1,6 @@
 library(readxl)
 Amtrak_data <- 
-  read_excel("~/PROYECTOS DATA SCIENCE/TSA_book/DATA/AmtrakPassengersMonthly T-Competition.xls", 
+  read_excel("./DATA/AmtrakPassengersMonthly T-Competition.xls", 
              sheet = "Data")
 ridership_ts <- ts(Amtrak_data$Ridership, 
                    start = c(1991,1), end = c(2004, 3),
@@ -48,7 +48,7 @@ plot + scale_x_date(date_labels = "%b-%Y", date_breaks = "1 year")
 
 library(readxl)
 Sept11Travel <- 
-  read_excel("~/PROYECTOS DATA SCIENCE/TSA_book/DATA/Sept11Travel.xls")
+  read_excel("./DATA/Sept11Travel.xls")
 
 # Load pre-event time series
 Rail_ts <- ts(Sept11Travel$`Rail PM`, 
@@ -155,7 +155,7 @@ lines(stats::filter(x= Air_ts,
 ### END PLOTS
 
 # Problem 2.6.2 -----------------------------------------------------------
-DepartmentStoreSales <- read_excel("~/PROYECTOS DATA SCIENCE/TSA_book/DATA/DepartmentStoreSales.xls", 
+DepartmentStoreSales <- read_excel("./DATA/DepartmentStoreSales.xls", 
                                    sheet = "Sheet1")
 DSS_ts <- ts(DepartmentStoreSales$Sales, 
               # start = c(1990,1,1), end = c(2001, 8, 1),
@@ -168,7 +168,7 @@ plot(DSS_ts,
 # b) Level, trend, seasonality
 
 # Problem 2.6.3 -----------------------------------------------------------
-ApplianceShipments <- read_excel("~/PROYECTOS DATA SCIENCE/TSA_book/DATA/ApplianceShipments.xls")
+ApplianceShipments <- read_excel("./DATA/ApplianceShipments.xls")
 
 ApplianceShipments$Quarter <- paste0(substr(ApplianceShipments$Quarter, 4, 7),
                                      "-", 
@@ -186,7 +186,7 @@ plot(AS_ts,
 # b) Level, trend seasonality
 
 # Problem 2.6.4 -----------------------------------------------------------
-CanadianWorkHours <- read_excel("~/PROYECTOS DATA SCIENCE/TSA_book/DATA/CanadianWorkHours.xls")
+CanadianWorkHours <- read_excel("./DATA/CanadianWorkHours.xls")
 
 CWH_ts <- ts(CanadianWorkHours$`Hours per week`, 
              start = c(1966), end = c(2000),
@@ -199,7 +199,7 @@ plot(CWH_ts,
 # b) Level, trend 
 
 # Problem 2.6.5 -----------------------------------------------------------
-SouvenirSales <- read_excel("~/PROYECTOS DATA SCIENCE/TSA_book/DATA/SouvenirSales.xls")
+SouvenirSales <- read_excel("./DATA/SouvenirSales.xls")
 
 SS_ts <- ts(SouvenirSales$Sales, 
              start = c(1995, 1, 1), end = c(2001, 12, 1),
@@ -245,7 +245,7 @@ plot + stat_smooth() + scale_y_continuous(trans='log10') + scale_x_continuous(tr
 
 
 # Problem 2.6.6 -----------------------------------------------------------
-ShampooSales <- read_excel("~/PROYECTOS DATA SCIENCE/TSA_book/DATA/ShampooSales.xls")
+ShampooSales <- read_excel("./DATA/ShampooSales.xls")
 
 ShS_ts <- ts(ShampooSales$`Shampoo Sales`, 
             start = c(1995, 1), end = c(1997, 12),

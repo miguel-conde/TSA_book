@@ -149,7 +149,7 @@ confusionMatrix(data = rainy_lrm_valid_pred, reference = valid_ts[,"Rain"])
 # The epidemic tipically occurs in the 3rd and 4th week of March, and hence the 
 # outbreak status is known by the end of March of a given year.
 library(readxl)
-PME <- read_excel("D:/PROYECTOS DATA SCIENCE/TSA_book/DATA/PowderyMildewEpidemic.xls")
+PME <- read_excel("./DATA/PowderyMildewEpidemic.xls")
 PME
 names(PME) <- make.names(names(PME))
 target <-   names(PME)[2]

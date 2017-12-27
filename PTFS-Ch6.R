@@ -2,7 +2,7 @@
 
 library(readxl)
 Amtrak_data <- 
-  read_excel("~/PROYECTOS DATA SCIENCE/TSA_book/DATA/AmtrakPassengersMonthly T-Competition.xls", 
+  read_excel("./DATA/AmtrakPassengersMonthly T-Competition.xls", 
              sheet = "Data")
 ridership_ts <- ts(Amtrak_data$Ridership, 
                    start = c(1991,1), end = c(2004, 3),
@@ -236,7 +236,7 @@ lines(postSep11_auto_ts, lwd = 2, col = "red")
 ## Problem 3 - Modeling Toys "R" Us Revenues
 
 tru_data <- 
-  read_excel("~/PROYECTOS DATA SCIENCE/TSA_book/DATA/ToysRUsRevenues.xls")
+  read_excel("./DATA/ToysRUsRevenues.xls")
 tru_ts <- ts(tru_data$`Revenue(in million $)`, 
              start = c(1992,1), end = c(1995, 4),
              frequency = 4)

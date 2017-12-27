@@ -5,7 +5,7 @@
 
 library(readxl)
 Amtrak_data <- 
-  read_excel("~/PROYECTOS DATA SCIENCE/TSA_book/DATA/AmtrakPassengersMonthly T-Competition.xls", 
+  read_excel("./DATA/AmtrakPassengersMonthly T-Competition.xls", 
              sheet = "Data")
 ridership_ts <- ts(Amtrak_data$Ridership, 
                    start = c(1991,1), end = c(2004, 3),

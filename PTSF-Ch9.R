@@ -172,7 +172,7 @@ lines(valid_ts)
 
 # Forecasting Australian Wine Sales
 library(readxl)
-AW <- read_excel("D:/PROYECTOS DATA SCIENCE/TSA_book/DATA/AustralianWines.xls")
+AW <- read_excel("./DATA/AustralianWines.xls")
 AW$`Source: Website` <- NULL
 
 AW_ts <- ts(AW[,-1], 
@@ -290,7 +290,7 @@ accuracy(fort.ets.pred, fort_valid_ts)
 
 ## PROBATINA
 library(readxl)
-PET_PRI_SPT_S1_M <- read_excel("D:/PROYECTOS DATA SCIENCE/TSA_book/DATA/PET_PRI_SPT_S1_M.xls")
+PET_PRI_SPT_S1_M <- read_excel("./DATA/PET_PRI_SPT_S1_M.xls")
 
 numNAs <- sum(is.na(PET_PRI_SPT_S1_M[,3]))
 EBSP_FOB <- PET_PRI_SPT_S1_M[(numNAs+1):nrow(PET_PRI_SPT_S1_M), c(1,3)]
@@ -558,12 +558,12 @@ endTrain   <- startTrain + c(0, (nTrain-1))
 startValid <- endTrain + c(0, 1)
 endValid   <- startValid + c(0, nValid-1)
 
-tgtTrain <- window(allData_zoo[, "Tgt"], start = startTrain, end = endTrain)
-tgtValid <- window(allData_zoo[, "Tgt"], start = startValid, end = endValid)
+tgtTrain <- window(allData_ts[, "Tgt"], start = startTrain, end = endTrain)
+tgtValid <- window(allData_ts[, "Tgt"], start = startValid, end = endValid)
 
-lagsTrain <- window(allData_zoo[, 1:(length(periods)-1)],
+lagsTrain <- window(allData_ts[, 1:(length(periods)-1)],
                     start = startTrain, end = endTrain)
-lagsValid <- window(allData_zoo[, 1:(length(periods)-1)],
+lagsValid <- window(allData_ts[, 1:(length(periods)-1)],
                     start = startValid, end = endValid)
 
 GSPC_rsnns <- elman(x = lagsTrain,
@@ -578,8 +578,10 @@ summary(GSPC_rsnns)
 
 plotIterativeError(GSPC_rsnns) 
 
-plot((c(tgtTrain, tgtValid)*scales["scale"])+scales["center"], 
-     main = "Google (GSPC)", xlab = "Time", ylab = "US $", lty = 1, lwd = 1)
+# plot((c(tgtTrain, tgtValid)*scales["scale"])+scales["center"], 
+plot((allData_ts[, "Tgt"]*scales["scale"])+scales["center"], 
+     main = "Google (GSPC)", xlab = "Time", ylab = "US $", lty = 1, lwd = 1,
+     type = "l")
 
 # WITH TRAIN
 GSPC_rsnns.tr_pred <- ts(predict(GSPC_rsnns, lagsTrain)*scales["scale"]+scales["center"], 
