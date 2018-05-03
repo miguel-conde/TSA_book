@@ -106,7 +106,7 @@ layout(1:1)
 
 # Global temperature series -----------------------------------------------
 
-www = "http://www.metoffice.gov.uk/hadobs/hadcrut4/data/current/time_series/HadCRUT.4.5.0.0.monthly_ns_avg.txt"
+www = "http://www.metoffice.gov.uk/hadobs/hadcrut4/data/current/time_series/HadCRUT.4.6.0.0.monthly_ns_avg.txt"
 global = read.table (www)
 #global.ts = ts(global, st=c(1856,1), end=c(2005,12), fr=12)
 global.ts = ts(global[,2], st=c(1850,1), fr=12)
@@ -223,7 +223,7 @@ ts.plot(AP, AP.predict, lty=1:2)
 ## 1. Carry out the following exploratory time series analysis using the 
 #  global temperature series
 
-www = "http://www.metoffice.gov.uk/hadobs/hadcrut4/data/current/time_series/HadCRUT.4.5.0.0.monthly_ns_avg.txt"
+www = "http://www.metoffice.gov.uk/hadobs/hadcrut4/data/current/time_series/HadCRUT.4.6.0.0.monthly_ns_avg.txt"
 global = read.table (www)
 global.ts = ts(global[,2], st=c(1850,1), fr=12)
 
