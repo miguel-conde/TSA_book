@@ -339,8 +339,8 @@ DOW.dummies                <- model.matrix(~ 0 + DOW,   data = bike.df)
 WorkingDay_Weather.dummies <- model.matrix(~ 0 + WorkingDay:Weather, 
                                            data = bike.df)
 
-colnames(Month.dummies) <- gsub("Month", "", colnames(Month.dummies))
-colnames(DOW.dummies)   <- gsub("DOW",   "", colnames(DOW.dummies))
+colnames(Month.dummies) <- gsub("\\\\.", "", gsub("Month", "", colnames(Month.dummies)))
+colnames(DOW.dummies)   <- gsub("\\\\.", "", gsub("DOW",   "", colnames(DOW.dummies)))
 colnames(WorkingDay_Weather.dummies) <- gsub("WorkingDay", "", 
                                              colnames(WorkingDay_Weather.dummies))
 colnames(WorkingDay_Weather.dummies) <- gsub("Weather", "", 
@@ -994,8 +994,8 @@ deseasonalized.temp.valid.ts <- window(deseasonalized.temp.ts,
                                         end   = valid_end)
 
 stl.fuel <- stl(WS_Fuel_ts, s.window = "periodic")
-temp.seasonal.fuel <- stl.fuel$time.series[, "seasonal"]
-temp.trend.fuel    <- stl.fuel$time.series[, "trend"]
+fuel.seasonal.comp <- stl.fuel$time.series[, "seasonal"]
+fuel.trend.comp    <- stl.fuel$time.series[, "trend"]
 deseasonalized.fuel.ts <- WS_Fuel_ts - fuel.seasonal.comp - temp.trend.fuel
 deseasonalized.fuel.train.ts <- window(deseasonalized.fuel.ts,
                                        start = train_start,
